@@ -2,6 +2,21 @@
   "name": "photo-manager",
   "version": "0.1.0",
   "private": true,
+  "description": "This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).",
+  "homepage": "https://github.com/uma-1510/gathrd-AI#readme",
+  "bugs": {
+    "url": "https://github.com/uma-1510/gathrd-AI/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uma-1510/gathrd-AI.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "main": "auth.js",
+  "directories": {
+    "lib": "lib"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

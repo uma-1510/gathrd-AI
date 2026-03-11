@@ -1,3 +1,4 @@
+// auth.js
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
@@ -7,36 +8,58 @@ import { initDb } from "@/lib/initDb";
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
+      name: "Credentials",
       credentials: {
-        username: { label: "Username" },
-        password: { label: "Password" },
+        username: { label: "Username", type: "text" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         await initDb();
+        if (!credentials?.username || !credentials?.password) return null;
 
-        // Hardcoded admin
-        if (credentials.username === "admin" && credentials.password === "password") {
-          return { id: 0, name: "Admin", username: "admin", role: "admin" };
-        }
-
-        // Look up user in DB
         const result = await pool.query(
           "SELECT * FROM users WHERE username = $1",
           [credentials.username]
         );
-        const user = result.rows[0];
-        if (!user) return null;
 
-        const valid = await bcrypt.compare(credentials.password, user.password);
-        if (!valid) return null;
+        // if (credentials.username === "admin" && credentials.password === "password") {
+        //   return {
+        //     id: 0,
+        //     name: "Admin",
+        //     username: "admin",
+        //     role: "admin",
+        //   };
+        // }
+        
+        try {
+          const result = await pool.query(
+            "SELECT * FROM users WHERE username = $1",
+            [credentials.username]
+          );
+          const user = result.rows[0];
 
-        return {
-          id: user.id,
-          name: user.username,
-          username: user.username,
-          email: user.email,
-          role: user.role,
-        };
+          if (!user) {
+            console.log("No user found:", credentials.username);
+            return null;
+          }
+
+          const valid = await bcrypt.compare(credentials.password, user.password);
+          if (!valid) {
+            console.log("Invalid password for user:", credentials.username);
+            return null;
+          }
+
+          return {
+            id: user.id,
+            name: user.username,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+          };
+        } catch (err) {
+          console.error("Database error in authorize:", err);
+          return null;
+        }
       },
     }),
   ],
@@ -49,11 +72,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      session.user.role = token.role;
-      session.user.username = token.username;
+      if (session.user) {
+        session.user.role = token.role;
+        session.user.username = token.username;
+      }
       return session;
     },
   },
   pages: { signIn: "/login" },
   secret: process.env.AUTH_SECRET,
+  session: { strategy: "jwt" },
+  debug: process.env.NODE_ENV === "development",
 });
