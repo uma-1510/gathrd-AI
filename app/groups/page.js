@@ -7,24 +7,26 @@ import { useSession } from 'next-auth/react';
 
 export default function Groups() {
   const { data: session } = useSession();
-  const [groups, setGroups] = useState([]);
-  const [selectedGroup, setSelectedGroup] = useState(null);
-  const [groupDetail, setGroupDetail] = useState(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newGroup, setNewGroup] = useState({ name: '', description: '' });
-  const [creating, setCreating] = useState(false);
-  const [newMember, setNewMember] = useState('');
-  const [addingMember, setAddingMember] = useState(false);
-  const [memberMsg, setMemberMsg] = useState('');
-  const [deleting, setDeleting] = useState(null);
-  const [removingMember, setRemovingMember] = useState(null);
-  const [myAlbums, setMyAlbums] = useState([]);
-  const [showShareAlbum, setShowShareAlbum] = useState(false);
-  const [sharingAlbum, setSharingAlbum] = useState(null);
-  const [albumShareMsg, setAlbumShareMsg] = useState('');
+
+  const [groups, setGroups]                     = useState([]);
+  const [selectedGroup, setSelectedGroup]       = useState(null);
+  const [groupDetail, setGroupDetail]           = useState(null);
+  const [showCreate, setShowCreate]             = useState(false);
+  const [newGroup, setNewGroup]                 = useState({ name: '', description: '' });
+  const [creating, setCreating]                 = useState(false);
+  const [newMember, setNewMember]               = useState('');
+  const [addingMember, setAddingMember]         = useState(false);
+  const [memberMsg, setMemberMsg]               = useState('');
+  const [deleting, setDeleting]                 = useState(null);
+  const [removingMember, setRemovingMember]     = useState(null);
+  const [myAlbums, setMyAlbums]                 = useState([]);
+  const [showShareAlbum, setShowShareAlbum]     = useState(false);
+  const [sharingAlbum, setSharingAlbum]         = useState(null);
+  const [albumShareMsg, setAlbumShareMsg]       = useState('');
 
   useEffect(() => { fetchGroups(); }, []);
 
+  // ── Original handlers — untouched ──
   const fetchGroups = async () => {
     const res = await fetch('/api/groups');
     const data = await res.json();
@@ -136,146 +138,300 @@ export default function Groups() {
     await fetchGroupDetail(selectedGroup.id);
   };
 
-  const isOwner = groupDetail && session?.user?.username === groupDetail.group.created_by;
-  const msgIsSuccess = (msg) => msg.startsWith('Added') || msg.startsWith('Album shared');
+  const isOwner       = groupDetail && session?.user?.username === groupDetail.group.created_by;
+  const msgIsSuccess  = (msg) => msg.startsWith('Added') || msg.startsWith('Album shared');
 
   return (
     <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap');
+        *, *::before, *::after { box-sizing:border-box; }
+        body { background:#f2efe9; font-family:'Syne',sans-serif; }
+
+        @keyframes fadeUp {
+          from { opacity:0; transform:translateY(14px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+        @keyframes scaleIn {
+          from { opacity:0; transform:scale(0.96) translateY(-8px); }
+          to   { opacity:1; transform:scale(1) translateY(0); }
+        }
+
+        .fu-1 { animation: fadeUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.05s both; }
+        .fu-2 { animation: fadeUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.14s both; }
+
+        .btn {
+          display:inline-flex; align-items:center; gap:7px;
+          padding:10px 20px; border-radius:100px; border:none; cursor:pointer;
+          font-family:'Syne',sans-serif; font-size:12px; font-weight:700;
+          letter-spacing:0.05em; text-transform:uppercase;
+          transition:transform 0.18s, box-shadow 0.18s, background 0.18s;
+        }
+        .btn:hover { transform:translateY(-1px); box-shadow:0 6px 18px rgba(0,0,0,0.1); }
+        .btn:disabled { opacity:0.4; cursor:not-allowed; transform:none; box-shadow:none; }
+        .btn-primary { background:#111; color:#f2efe9; }
+        .btn-ghost   { background:rgba(17,17,17,0.06); color:#111; border:1.5px solid rgba(17,17,17,0.12); }
+        .btn-ghost:hover { background:rgba(17,17,17,0.1); }
+        .btn-danger  { background:rgba(220,38,38,0.07); color:#c0392b; border:1.5px solid rgba(220,38,38,0.18); }
+        .btn-danger:hover { background:rgba(220,38,38,0.12); }
+        .btn-sm { padding:6px 14px; font-size:11px; }
+
+        /* Group card */
+        .group-card {
+          background:#faf8f4; border:1.5px solid rgba(17,17,17,0.07);
+          border-radius:14px; padding:18px 20px; cursor:pointer;
+          transition:border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+        }
+        .group-card:hover { border-color:rgba(17,17,17,0.18); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.07); }
+        .group-card.active { border-color:#111; box-shadow:0 0 0 1px #111; }
+        .group-name {
+          font-family:'Syne',sans-serif; font-size:14px; font-weight:700; color:#111; margin-bottom:4px;
+        }
+        .group-desc {
+          font-family:'Syne',sans-serif; font-size:12px; color:rgba(17,17,17,0.42); margin-bottom:8px;
+        }
+        .group-meta {
+          font-family:'Syne',sans-serif; font-size:11px; font-weight:500;
+          letter-spacing:0.06em; text-transform:uppercase; color:rgba(17,17,17,0.32);
+          display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+        }
+        .owner-badge {
+          background:rgba(17,17,17,0.08); color:rgba(17,17,17,0.55);
+          padding:2px 8px; border-radius:100px;
+          font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+        }
+
+        /* Panel card */
+        .panel {
+          background:#faf8f4; border:1px solid rgba(17,17,17,0.07);
+          border-radius:16px; overflow:hidden;
+        }
+        .panel-header {
+          padding:16px 20px; border-bottom:1px solid rgba(17,17,17,0.07);
+          display:flex; justify-content:space-between; align-items:center;
+        }
+        .panel-title {
+          font-family:'Syne',sans-serif; font-size:13px; font-weight:700;
+          letter-spacing:0.04em; text-transform:uppercase; color:rgba(17,17,17,0.55);
+        }
+        .panel-body { padding:20px; }
+
+        /* Member row */
+        .member-row {
+          display:flex; justify-content:space-between; align-items:center;
+          padding:10px 12px; border-radius:10px; background:rgba(17,17,17,0.03);
+          margin-bottom:6px;
+        }
+        .member-name { font-family:'Syne',sans-serif; font-size:13px; font-weight:600; color:#111; }
+        .role-badge {
+          padding:2px 8px; border-radius:100px;
+          font-family:'Syne',sans-serif; font-size:10px; font-weight:700;
+          letter-spacing:0.08em; text-transform:uppercase;
+        }
+        .role-owner  { background:rgba(17,17,17,0.08); color:rgba(17,17,17,0.6); }
+        .role-member { background:rgba(45,138,94,0.1); color:#2d8a5e; }
+
+        /* Add member input row */
+        .input-row { display:flex; gap:8px; margin-top:12px; }
+        .text-input {
+          flex:1; padding:10px 16px;
+          background:rgba(17,17,17,0.04); border:1.5px solid rgba(17,17,17,0.12);
+          border-radius:100px; outline:none;
+          font-family:'Syne',sans-serif; font-size:13px; color:#111;
+          transition:border-color 0.2s, background 0.2s;
+        }
+        .text-input:focus { border-color:rgba(17,17,17,0.5); background:#fff; }
+        .text-input::placeholder { color:rgba(17,17,17,0.28); }
+
+        /* Album mini card */
+        .album-mini {
+          background:rgba(17,17,17,0.03); border:1px solid rgba(17,17,17,0.07);
+          border-radius:12px; overflow:hidden;
+        }
+        .album-mini-cover {
+          height:110px; background:rgba(17,17,17,0.06);
+          display:flex; align-items:center; justify-content:center; overflow:hidden;
+        }
+        .album-mini-cover img { width:100%; height:100%; object-fit:cover; }
+        .album-mini-info { padding:10px 12px; }
+        .album-mini-name { font-family:'Syne',sans-serif; font-size:13px; font-weight:700; color:#111; margin-bottom:2px; }
+        .album-mini-meta { font-family:'Syne',sans-serif; font-size:11px; color:rgba(17,17,17,0.38); }
+
+        /* Modal */
+        .modal-overlay {
+          position:fixed; inset:0; background:rgba(8,5,3,0.65); z-index:2000;
+          display:flex; align-items:center; justify-content:center; padding:24px;
+          animation: fadeIn 0.18s ease both;
+        }
+        .modal-card {
+          background:#faf8f4; border:1px solid rgba(17,17,17,0.08);
+          border-radius:24px; padding:clamp(28px,4vw,40px);
+          width:100%; max-width:440px;
+          box-shadow:0 32px 80px rgba(0,0,0,0.22);
+          animation: scaleIn 0.28s cubic-bezier(0.22,1,0.36,1) both;
+        }
+        .modal-card-lg {
+          max-width:520px; max-height:82vh;
+          display:flex; flex-direction:column; padding:0;
+        }
+        .modal-title {
+          font-family:'Instrument Serif',serif;
+          font-size:clamp(22px,2.5vw,28px); font-weight:400; font-style:italic;
+          color:#111; letter-spacing:-0.02em; margin-bottom:24px;
+        }
+        .field { margin-bottom:16px; }
+        .field-label {
+          display:block; margin-bottom:7px;
+          font-family:'Syne',sans-serif; font-size:11px; font-weight:600;
+          letter-spacing:0.12em; text-transform:uppercase; color:rgba(17,17,17,0.42);
+        }
+        .field-input, .field-textarea {
+          width:100%; padding:12px 16px;
+          background:rgba(17,17,17,0.04); border:1.5px solid rgba(17,17,17,0.11);
+          border-radius:10px; outline:none;
+          font-family:'Syne',sans-serif; font-size:14px; color:#111;
+          transition:border-color 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+        .field-input:focus, .field-textarea:focus {
+          border-color:rgba(17,17,17,0.5); background:#fff;
+          box-shadow:0 0 0 3px rgba(17,17,17,0.05);
+        }
+        .field-input::placeholder, .field-textarea::placeholder { color:rgba(17,17,17,0.25); }
+        .field-textarea { resize:vertical; min-height:76px; }
+        .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:22px; }
+
+        .empty-state { text-align:center; padding:60px 24px; }
+        .empty-icon {
+          width:56px; height:56px; border-radius:16px;
+          background:rgba(17,17,17,0.05); border:1.5px solid rgba(17,17,17,0.08);
+          display:flex; align-items:center; justify-content:center; margin:0 auto 16px;
+        }
+      `}</style>
+
       <Header />
       <Sidebar />
-      <main style={{ marginLeft: '240px', marginTop: '64px', padding: '2.5rem 2rem', minHeight: 'calc(100vh - 64px)', backgroundColor: '#f8fafc' }}>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '2rem', fontWeight: '700', margin: 0, color: '#111827' }}>Groups</h1>
-          <button
-            onClick={() => setShowCreate(true)}
-            style={{ padding: '0.8rem 1.5rem', backgroundColor: '#8b5cf6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#8b5cf6'}
-          >
-            + Create Group
+      <main style={{ marginLeft:'240px', marginTop:'62px', padding:'36px 32px', minHeight:'calc(100vh - 62px)', background:'#f2efe9' }}>
+
+        {/* Header */}
+        <div className="fu-1" style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:36, flexWrap:'wrap', gap:16 }}>
+          <div>
+            <p style={{ fontFamily:"'Syne',sans-serif", fontSize:11, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(17,17,17,0.35)', marginBottom:6 }}>
+              Collaborate
+            </p>
+            <h1 style={{ fontFamily:"'Instrument Serif',serif", fontSize:'clamp(26px,3.5vw,40px)', fontWeight:400, fontStyle:'italic', color:'#111', lineHeight:1.1, letterSpacing:'-0.02em' }}>
+              Groups
+            </h1>
+          </div>
+          {/* Original onClick */}
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Create Group
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: selectedGroup ? '300px 1fr' : '1fr', gap: '2rem' }}>
+        {/* Two-column layout — original grid logic preserved */}
+        <div className="fu-2" style={{ display:'grid', gridTemplateColumns: selectedGroup ? '280px 1fr' : '1fr', gap:24, alignItems:'start' }}>
 
           {/* Groups list */}
-          <div>
-            {groups.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {groups.map((group) => (
-                  <div
-                    key={group.id}
-                    onClick={() => handleSelectGroup(group)}
-                    style={{
-                      backgroundColor: 'white', borderRadius: '12px', padding: '1.25rem',
-                      boxShadow: selectedGroup?.id === group.id ? '0 0 0 2px #8b5cf6' : '0 2px 6px rgba(0,0,0,0.07)',
-                      cursor: 'pointer', transition: 'all 0.2s',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <div style={{ fontWeight: '700', fontSize: '1.05rem', color: '#111827', marginBottom: '0.25rem' }}>
-                          Groups {group.name}
-                        </div>
-                        {group.description && (
-                          <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.5rem' }}>{group.description}</div>
-                        )}
-                        <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
-                          {group.member_count} member{group.member_count !== '1' ? 's' : ''} · {group.album_count} album{group.album_count !== '1' ? 's' : ''}
-                          {group.is_owner && (
-                            <span style={{ marginLeft: '0.5rem', backgroundColor: '#f5f3ff', color: '#7c3aed', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem' }}>
-                              Owner
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {group.is_owner && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(group.id); }}
-                          disabled={deleting === group.id}
-                          style={{ padding: '0.3rem 0.6rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
-                        >
-                          {deleting === group.id ? '...' : 'Delete'}
-                        </button>
-                      )}
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {groups.length > 0 ? groups.map((group) => (
+              <div
+                key={group.id}
+                className={`group-card${selectedGroup?.id === group.id ? ' active' : ''}`}
+                onClick={() => handleSelectGroup(group)}
+              >
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div className="group-name">{group.name}</div>
+                    {group.description && <div className="group-desc">{group.description}</div>}
+                    <div className="group-meta">
+                      {group.member_count} member{group.member_count !== '1' ? 's' : ''}
+                      <span style={{ opacity:0.4 }}>·</span>
+                      {group.album_count} album{group.album_count !== '1' ? 's' : ''}
+                      {group.is_owner && <span className="owner-badge">Owner</span>}
                     </div>
                   </div>
-                ))}
+                  {/* Delete — original onClick + condition */}
+                  {group.is_owner && (
+                    <button
+                      className="btn btn-danger btn-sm"
+                      style={{ marginLeft:8, flexShrink:0 }}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(group.id); }}
+                      disabled={deleting === group.id}
+                    >
+                      {deleting === group.id ? '…' : 'Delete'}
+                    </button>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '4rem 1rem', color: '#6b7280', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 6px rgba(0,0,0,0.07)' }}>
-                <p style={{ fontSize: '1.3rem', marginBottom: '0.75rem' }}>No groups yet</p>
-                <p style={{ fontSize: '0.9rem' }}>Create a group to collaborate with others</p>
+            )) : (
+              <div className="empty-state">
+                <div className="empty-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(17,17,17,0.3)" strokeWidth="1.6" strokeLinecap="round"><circle cx="9" cy="7" r="3"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.87"/></svg>
+                </div>
+                <p style={{ fontFamily:"'Instrument Serif',serif", fontSize:18, fontStyle:'italic', color:'rgba(17,17,17,0.42)', marginBottom:6 }}>No groups yet</p>
+                <p style={{ fontFamily:"'Syne',sans-serif", fontSize:12, color:'rgba(17,17,17,0.32)' }}>Create a group to collaborate</p>
               </div>
             )}
           </div>
 
-          {/* Group detail panel */}
+          {/* Group detail — original condition preserved */}
           {selectedGroup && groupDetail && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
 
-              {/* Members section */}
-              <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-                <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #f1f5f9' }}>
-                  <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#111827' }}>
-                    Members ({groupDetail.members.length})
-                  </h2>
+              {/* Members panel */}
+              <div className="panel">
+                <div className="panel-header">
+                  <span className="panel-title">Members ({groupDetail.members.length})</span>
                 </div>
-                <div style={{ padding: '1.25rem 1.5rem' }}>
-                  <div style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {groupDetail.members.map((member) => (
-                      <div
-                        key={member.username}
-                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px' }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ fontWeight: '500', color: '#111827' }}>{member.username}</span>
-                          <span style={{
-                            fontSize: '0.75rem',
-                            backgroundColor: member.role === 'owner' ? '#f5f3ff' : '#f0fdf4',
-                            color: member.role === 'owner' ? '#7c3aed' : '#10b981',
-                            padding: '0.15rem 0.5rem', borderRadius: '4px'
-                          }}>
-                            {member.role}
-                          </span>
+                <div className="panel-body">
+                  {groupDetail.members.map((member) => (
+                    <div key={member.username} className="member-row">
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <div style={{ width:30, height:30, borderRadius:'50%', background:'rgba(17,17,17,0.08)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Syne',sans-serif", fontSize:12, fontWeight:700, color:'#111' }}>
+                          {member.username[0]?.toUpperCase()}
                         </div>
-                        {isOwner && member.role !== 'owner' && (
-                          <button
-                            onClick={() => handleRemoveMember(member.username)}
-                            disabled={removingMember === member.username}
-                            style={{ padding: '0.25rem 0.6rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
-                          >
-                            {removingMember === member.username ? '...' : 'Remove'}
-                          </button>
-                        )}
+                        <span className="member-name">{member.username}</span>
+                        <span className={`role-badge ${member.role === 'owner' ? 'role-owner' : 'role-member'}`}>
+                          {member.role}
+                        </span>
                       </div>
-                    ))}
-                  </div>
+                      {/* Remove — original condition + handler */}
+                      {isOwner && member.role !== 'owner' && (
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleRemoveMember(member.username)}
+                          disabled={removingMember === member.username}
+                        >
+                          {removingMember === member.username ? '…' : 'Remove'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
 
+                  {/* Add member — original isOwner condition */}
                   {isOwner && (
                     <div>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <div className="input-row">
                         <input
+                          className="text-input"
                           type="text"
                           value={newMember}
                           onChange={(e) => { setNewMember(e.target.value); setMemberMsg(''); }}
-                          placeholder="Add member by username..."
-                          style={{ flex: 1, padding: '0.65rem 0.9rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                          onFocus={(e) => e.target.style.borderColor = '#8b5cf6'}
-                          onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                          placeholder="Add member by username…"
                           onKeyDown={(e) => { if (e.key === 'Enter') handleAddMember(); }}
                         />
                         <button
+                          className="btn btn-primary"
                           onClick={handleAddMember}
                           disabled={addingMember || !newMember.trim()}
-                          style={{ padding: '0.65rem 1.1rem', backgroundColor: addingMember ? '#9ca3af' : '#8b5cf6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: addingMember ? 'not-allowed' : 'pointer' }}
-                        >
-                          {addingMember ? '...' : '+ Add'}
-                        </button>
+                          style={{ flexShrink:0 }}
+                        >{addingMember ? '…' : '+ Add'}</button>
                       </div>
                       {memberMsg && (
-                        <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: msgIsSuccess(memberMsg) ? '#10b981' : '#dc2626' }}>
+                        <p style={{ fontFamily:"'Syne',sans-serif", fontSize:12, fontWeight:500, color: msgIsSuccess(memberMsg) ? '#2d8a5e' : '#c0392b', marginTop:8, marginBottom:0 }}>
                           {memberMsg}
                         </p>
                       )}
@@ -284,168 +440,153 @@ export default function Groups() {
                 </div>
               </div>
 
-              {/* Albums section */}
-              <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-                <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#111827' }}>
-                    Group Albums ({groupDetail.albums.length})
-                  </h2>
+              {/* Albums panel */}
+              <div className="panel">
+                <div className="panel-header">
+                  <span className="panel-title">Group Albums ({groupDetail.albums.length})</span>
+                  {/* Original onClick */}
                   <button
+                    className="btn btn-ghost btn-sm"
                     onClick={async () => { await fetchMyAlbums(); setShowShareAlbum(true); setAlbumShareMsg(''); }}
-                    style={{ padding: '0.5rem 1rem', backgroundColor: '#8b5cf6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' }}
-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#8b5cf6'}
-                  >
-                    + Share Album
-                  </button>
+                  >+ Share album</button>
                 </div>
-                <div style={{ padding: '1.25rem 1.5rem' }}>
+                <div className="panel-body">
                   {groupDetail.albums.length > 0 ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px,1fr))', gap:14 }}>
                       {groupDetail.albums.map((album) => (
-                        <div key={album.id} style={{ backgroundColor: '#f8fafc', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 6px rgba(0,0,0,0.07)' }}>
-                          <div style={{ height: '120px', backgroundColor: '#e2e8f0', overflow: 'hidden' }}>
+                        <div key={album.id} className="album-mini">
+                          <div className="album-mini-cover">
                             {album.cover_url
-                              ? <img src={album.cover_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>Photo</div>
+                              ? <img src={album.cover_url} alt="" />
+                              : <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(17,17,17,0.2)" strokeWidth="1.5" strokeLinecap="round"><path d="M3 7a2 2 0 0 1 2-2h3l2 2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                             }
                           </div>
-                          <div style={{ padding: '0.75rem' }}>
-                            <div style={{ fontWeight: '600', fontSize: '0.95rem', color: '#111827', marginBottom: '0.2rem' }}>{album.name}</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>{album.photo_count} photos</span>
+                          <div className="album-mini-info">
+                            <div className="album-mini-name">{album.name}</div>
+                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4 }}>
+                              <span className="album-mini-meta">{album.photo_count} photos</span>
+                              {/* Original shared_by condition */}
                               {album.shared_by === session?.user?.username && (
                                 <button
+                                  className="btn btn-danger btn-sm"
+                                  style={{ padding:'4px 10px' }}
                                   onClick={() => handleUnshareAlbum(album.id)}
-                                  style={{ padding: '0.2rem 0.5rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
-                                >
-                                  Remove
-                                </button>
+                                >Remove</button>
                               )}
                             </div>
-                            <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.2rem' }}>by @{album.shared_by}</div>
+                            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:11, color:'rgba(17,17,17,0.32)', marginTop:2 }}>by @{album.shared_by}</div>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p style={{ color: '#6b7280', textAlign: 'center', padding: '2rem' }}>No albums shared with this group yet</p>
+                    <p style={{ fontFamily:"'Syne',sans-serif", fontSize:13, color:'rgba(17,17,17,0.38)', textAlign:'center', padding:'24px 0' }}>
+                      No albums shared with this group yet
+                    </p>
                   )}
                 </div>
               </div>
-
             </div>
           )}
         </div>
       </main>
 
-      {/* Create Group Modal */}
+      {/* ── Create Group Modal — original handleCreate preserved ── */}
       {showCreate && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '440px', boxShadow: '0 25px 50px rgba(0,0,0,0.2)' }}>
-            <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.5rem', fontWeight: '700' }}>Create New Group</h2>
-
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>Group Name *</label>
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <h2 className="modal-title">Create new group</h2>
+            <div className="field">
+              <label className="field-label">Group name *</label>
               <input
+                className="field-input"
                 type="text"
                 value={newGroup.name}
                 onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
-                placeholder="e.g. Family, Team, Friends"
-                style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
-                onFocus={(e) => e.target.style.borderColor = '#8b5cf6'}
-                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                placeholder="e.g. Family, Friends, Team"
               />
             </div>
-
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>Description (optional)</label>
+            <div className="field">
+              <label className="field-label">Description (optional)</label>
               <textarea
+                className="field-textarea"
                 value={newGroup.description}
                 onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
                 placeholder="What is this group for?"
                 rows={3}
-                style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '1rem', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
-                onFocus={(e) => e.target.style.borderColor = '#8b5cf6'}
-                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
               />
             </div>
-
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => { setShowCreate(false); setNewGroup({ name: '', description: '' }); }}
-                style={{ padding: '0.75rem 1.25rem', backgroundColor: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-              >
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => { setShowCreate(false); setNewGroup({ name:'', description:'' }); }}>
                 Cancel
               </button>
               <button
+                className="btn btn-primary"
                 onClick={handleCreate}
                 disabled={creating || !newGroup.name.trim()}
-                style={{ padding: '0.75rem 1.5rem', backgroundColor: creating ? '#9ca3af' : '#8b5cf6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: creating ? 'not-allowed' : 'pointer' }}
-              >
-                {creating ? 'Creating...' : 'Create Group'}
-              </button>
+              >{creating ? 'Creating…' : 'Create group'}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Share Album with Group Modal */}
+      {/* ── Share Album with Group Modal — original logic preserved ── */}
       {showShareAlbum && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '12px', width: '100%', maxWidth: '500px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px rgba(0,0,0,0.2)' }}>
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid #e5e7eb' }}>
-              <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: '700' }}>
-                Share Album with {selectedGroup?.name}
-              </h2>
+        <div className="modal-overlay">
+          <div className="modal-card modal-card-lg" style={{ background:'#faf8f4', borderRadius:24 }}>
+            <div style={{ padding:'28px 32px 20px', borderBottom:'1px solid rgba(17,17,17,0.07)' }}>
+              <h2 className="modal-title" style={{ marginBottom:4 }}>Share album with group</h2>
+              <p style={{ fontFamily:"'Syne',sans-serif", fontSize:13, color:'rgba(17,17,17,0.42)' }}>
+                {selectedGroup?.name}
+              </p>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
+
+            <div style={{ flex:1, overflowY:'auto', padding:'20px 32px' }}>
               {albumShareMsg && (
-                <p style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: msgIsSuccess(albumShareMsg) ? '#10b981' : '#dc2626' }}>
+                <p style={{ fontFamily:"'Syne',sans-serif", fontSize:12, fontWeight:500, color: msgIsSuccess(albumShareMsg) ? '#2d8a5e' : '#c0392b', marginBottom:16 }}>
                   {albumShareMsg}
                 </p>
               )}
               {myAlbums.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                   {myAlbums.map((album) => {
                     const alreadyShared = groupDetail?.albums?.some((a) => a.id === album.id);
                     return (
-                      <div
-                        key={album.id}
-                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', backgroundColor: '#f8fafc', borderRadius: '8px' }}
-                      >
+                      <div key={album.id} style={{
+                        display:'flex', justifyContent:'space-between', alignItems:'center',
+                        padding:'12px 16px', background:'rgba(17,17,17,0.03)',
+                        border:'1px solid rgba(17,17,17,0.07)', borderRadius:12,
+                      }}>
                         <div>
-                          <div style={{ fontWeight: '600', color: '#111827' }}>{album.name}</div>
-                          <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>{album.photo_count} photos</div>
+                          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:13, fontWeight:700, color:'#111', marginBottom:2 }}>{album.name}</div>
+                          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:11, color:'rgba(17,17,17,0.38)' }}>{album.photo_count} photos</div>
                         </div>
+                        {/* Original condition + handler */}
                         <button
+                          className={`btn btn-sm ${alreadyShared ? 'btn-ghost' : 'btn-primary'}`}
                           onClick={() => { if (!alreadyShared) handleShareAlbum(album.id); }}
                           disabled={alreadyShared || sharingAlbum === album.id}
-                          style={{
-                            padding: '0.4rem 0.9rem',
-                            backgroundColor: alreadyShared ? '#d1fae5' : sharingAlbum === album.id ? '#9ca3af' : '#8b5cf6',
-                            color: alreadyShared ? '#10b981' : 'white',
-                            border: 'none', borderRadius: '6px', fontWeight: '600',
-                            cursor: alreadyShared ? 'default' : 'pointer', fontSize: '0.85rem'
-                          }}
+                          style={{ opacity: alreadyShared ? 0.55 : 1 }}
                         >
-                          {alreadyShared ? 'Shared' : sharingAlbum === album.id ? '...' : 'Share'}
+                          {alreadyShared ? 'Shared ✓' : sharingAlbum === album.id ? '…' : 'Share'}
                         </button>
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <p style={{ textAlign: 'center', color: '#6b7280', padding: '2rem' }}>You have no albums to share</p>
+                <p style={{ fontFamily:"'Syne',sans-serif", fontSize:13, color:'rgba(17,17,17,0.38)', textAlign:'center', padding:'32px 0' }}>
+                  You have no albums to share
+                </p>
               )}
             </div>
-            <div style={{ padding: '1.25rem 1.5rem', borderTop: '1px solid #e5e7eb' }}>
+
+            <div style={{ padding:'16px 32px', borderTop:'1px solid rgba(17,17,17,0.07)' }}>
               <button
+                className="btn btn-ghost"
+                style={{ width:'100%', justifyContent:'center' }}
                 onClick={() => { setShowShareAlbum(false); setAlbumShareMsg(''); }}
-                style={{ width: '100%', padding: '0.75rem', backgroundColor: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-              >
-                Close
-              </button>
+              >Close</button>
             </div>
           </div>
         </div>

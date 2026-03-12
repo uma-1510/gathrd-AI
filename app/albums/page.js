@@ -7,18 +7,21 @@ import Sidebar from '../../components/Sidebar';
 
 export default function Albums() {
   const router = useRouter();
-  const [albums, setAlbums] = useState([]);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newAlbum, setNewAlbum] = useState({ name: '', description: '' });
-  const [creating, setCreating] = useState(false);
-  const [deleting, setDeleting] = useState(null);
-  const [sharingAlbum, setSharingAlbum] = useState(null);
+
+  // ── Original state — untouched ──
+  const [albums, setAlbums]                     = useState([]);
+  const [showCreate, setShowCreate]             = useState(false);
+  const [newAlbum, setNewAlbum]                 = useState({ name: '', description: '' });
+  const [creating, setCreating]                 = useState(false);
+  const [deleting, setDeleting]                 = useState(null);
+  const [sharingAlbum, setSharingAlbum]         = useState(null);
   const [albumShareUsername, setAlbumShareUsername] = useState('');
-  const [albumShareMsg, setAlbumShareMsg] = useState('');
-  const [albumSharing, setAlbumSharing] = useState(false);
+  const [albumShareMsg, setAlbumShareMsg]       = useState('');
+  const [albumSharing, setAlbumSharing]         = useState(false);
 
   useEffect(() => { fetchAlbums(); }, []);
 
+  // ── Original handlers — untouched ──
   const fetchAlbums = async () => {
     const res = await fetch('/api/albums');
     const data = await res.json();
@@ -67,130 +70,210 @@ export default function Albums() {
 
   return (
     <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap');
+        *, *::before, *::after { box-sizing:border-box; }
+        body { background:#f2efe9; font-family:'Syne',sans-serif; }
+
+        @keyframes fadeUp {
+          from { opacity:0; transform:translateY(14px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+        @keyframes scaleIn {
+          from { opacity:0; transform:scale(0.96) translateY(-8px); }
+          to   { opacity:1; transform:scale(1)    translateY(0); }
+        }
+
+        .fu-1 { animation: fadeUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.05s both; }
+        .fu-2 { animation: fadeUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.14s both; }
+
+        /* Buttons */
+        .btn {
+          display:inline-flex; align-items:center; gap:7px;
+          padding:11px 22px; border-radius:100px; border:none; cursor:pointer;
+          font-family:'Syne',sans-serif; font-size:12px; font-weight:700;
+          letter-spacing:0.05em; text-transform:uppercase;
+          transition:transform 0.18s, box-shadow 0.18s, background 0.18s;
+        }
+        .btn:hover { transform:translateY(-1px); box-shadow:0 6px 18px rgba(0,0,0,0.1); }
+        .btn:disabled { opacity:0.4; cursor:not-allowed; transform:none; box-shadow:none; }
+        .btn-primary   { background:#111; color:#f2efe9; }
+        .btn-ghost     { background:rgba(17,17,17,0.06); color:#111; border:1.5px solid rgba(17,17,17,0.12); }
+        .btn-ghost:hover { background:rgba(17,17,17,0.1); }
+        .btn-danger    { background:rgba(220,38,38,0.08); color:#c0392b; border:1.5px solid rgba(220,38,38,0.18); }
+        .btn-danger:hover { background:rgba(220,38,38,0.14); }
+        .btn-share     { background:rgba(17,17,17,0.05); color:rgba(17,17,17,0.6); border:1.5px solid rgba(17,17,17,0.1); }
+        .btn-share:hover { background:rgba(17,17,17,0.09); color:#111; }
+
+        /* Album card */
+        .album-card {
+          background:#faf8f4;
+          border:1px solid rgba(17,17,17,0.07);
+          border-radius:16px; overflow:hidden;
+          cursor:pointer;
+          transition:transform 0.22s cubic-bezier(0.22,1,0.36,1), box-shadow 0.22s;
+        }
+        .album-card:hover {
+          transform:translateY(-5px);
+          box-shadow:0 20px 48px rgba(0,0,0,0.1);
+        }
+        .album-cover {
+          height:170px; overflow:hidden;
+          background:rgba(17,17,17,0.06);
+          display:flex; align-items:center; justify-content:center;
+        }
+        .album-cover img { width:100%; height:100%; object-fit:cover; display:block; transition:transform 0.4s; }
+        .album-card:hover .album-cover img { transform:scale(1.05); }
+        .album-info { padding:14px 16px; }
+        .album-name {
+          font-family:'Syne',sans-serif; font-size:14px; font-weight:700; color:#111;
+          margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        .album-desc {
+          font-family:'Syne',sans-serif; font-size:12px; color:rgba(17,17,17,0.42);
+          margin-bottom:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        .album-meta {
+          display:flex; justify-content:space-between; align-items:center; gap:8px;
+          flex-wrap:wrap;
+        }
+        .album-count {
+          font-family:'Syne',sans-serif; font-size:11px; font-weight:600;
+          letter-spacing:0.08em; text-transform:uppercase; color:rgba(17,17,17,0.35);
+        }
+
+        /* Modal */
+        .modal-overlay {
+          position:fixed; inset:0;
+          background:rgba(8,5,3,0.65); z-index:2000;
+          display:flex; align-items:center; justify-content:center; padding:24px;
+          animation: fadeIn 0.18s ease both;
+        }
+        .modal-card {
+          background:#faf8f4;
+          border:1px solid rgba(17,17,17,0.08);
+          border-radius:24px; padding:clamp(28px,4vw,40px);
+          width:100%; max-width:440px;
+          box-shadow:0 32px 80px rgba(0,0,0,0.22);
+          animation: scaleIn 0.28s cubic-bezier(0.22,1,0.36,1) both;
+        }
+        .modal-title {
+          font-family:'Instrument Serif',serif;
+          font-size:clamp(22px,2.5vw,28px);
+          font-weight:400; font-style:italic; color:#111;
+          letter-spacing:-0.02em; margin-bottom:24px;
+        }
+
+        /* Form fields */
+        .field { margin-bottom:18px; }
+        .field-label {
+          display:block; margin-bottom:7px;
+          font-family:'Syne',sans-serif; font-size:11px; font-weight:600;
+          letter-spacing:0.12em; text-transform:uppercase; color:rgba(17,17,17,0.42);
+        }
+        .field-input, .field-textarea {
+          width:100%; padding:12px 16px;
+          background:rgba(17,17,17,0.04);
+          border:1.5px solid rgba(17,17,17,0.11);
+          border-radius:10px; outline:none;
+          font-family:'Syne',sans-serif; font-size:14px; color:#111;
+          transition:border-color 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+        .field-input:focus, .field-textarea:focus {
+          border-color:rgba(17,17,17,0.5); background:#fff;
+          box-shadow:0 0 0 3px rgba(17,17,17,0.05);
+        }
+        .field-input::placeholder, .field-textarea::placeholder { color:rgba(17,17,17,0.25); }
+        .field-textarea { resize:vertical; min-height:80px; }
+
+        .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; }
+
+        /* Share input row */
+        .share-row { display:flex; gap:8px; margin-bottom:10px; }
+        .share-input {
+          flex:1; padding:11px 16px;
+          background:rgba(17,17,17,0.04);
+          border:1.5px solid rgba(17,17,17,0.12);
+          border-radius:100px; outline:none;
+          font-family:'Syne',sans-serif; font-size:13px; color:#111;
+          transition:border-color 0.2s, background 0.2s;
+        }
+        .share-input:focus { border-color:rgba(17,17,17,0.5); background:#fff; }
+        .share-input::placeholder { color:rgba(17,17,17,0.28); }
+
+        /* Empty state */
+        .empty-state { text-align:center; padding:80px 24px; animation: fadeIn 0.6s ease 0.1s both; }
+        .empty-icon {
+          width:64px; height:64px; border-radius:18px;
+          background:rgba(17,17,17,0.05); border:1.5px solid rgba(17,17,17,0.08);
+          display:flex; align-items:center; justify-content:center;
+          margin:0 auto 20px;
+        }
+      `}</style>
+
       <Header />
       <Sidebar />
-      <main style={{ marginLeft: '240px', marginTop: '64px', padding: '2.5rem 2rem', minHeight: 'calc(100vh - 64px)', backgroundColor: '#f8fafc' }}>
 
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '2rem', fontWeight: '700', margin: 0, color: '#111827' }}>Albums</h1>
-          <button
-            onClick={() => setShowCreate(true)}
-            style={{ padding: '0.8rem 1.5rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '1rem' }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#059669'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
-          >
-            + Create Album
+      <main style={{ marginLeft:'240px', marginTop:'62px', padding:'36px 32px', minHeight:'calc(100vh - 62px)', background:'#f2efe9' }}>
+
+        {/* Page header */}
+        <div className="fu-1" style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:36, flexWrap:'wrap', gap:16 }}>
+          <div>
+            <p style={{ fontFamily:"'Syne',sans-serif", fontSize:11, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(17,17,17,0.35)', marginBottom:6 }}>
+              Your collections
+            </p>
+            <h1 style={{ fontFamily:"'Instrument Serif',serif", fontSize:'clamp(26px,3.5vw,40px)', fontWeight:400, fontStyle:'italic', color:'#111', lineHeight:1.1, letterSpacing:'-0.02em' }}>
+              Albums
+            </h1>
+          </div>
+          {/* Original onClick preserved */}
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Create Album
           </button>
         </div>
 
-        {/* Create Album Modal */}
-        {showCreate && (
-          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '440px', boxShadow: '0 25px 50px rgba(0,0,0,0.2)' }}>
-              <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.5rem', fontWeight: '700' }}>Create New Album</h2>
-
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>Album Name *</label>
-                <input
-                  type="text"
-                  value={newAlbum.name}
-                  onChange={(e) => setNewAlbum({ ...newAlbum, name: e.target.value })}
-                  placeholder="e.g. Summer 2025"
-                  style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
-                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-                />
-              </div>
-
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', color: '#374151' }}>Description (optional)</label>
-                <textarea
-                  value={newAlbum.description}
-                  onChange={(e) => setNewAlbum({ ...newAlbum, description: e.target.value })}
-                  placeholder="What's this album about?"
-                  rows={3}
-                  style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '1rem', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
-                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                <button
-                  onClick={() => { setShowCreate(false); setNewAlbum({ name: '', description: '' }); }}
-                  style={{ padding: '0.75rem 1.25rem', backgroundColor: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreate}
-                  disabled={creating || !newAlbum.name.trim()}
-                  style={{ padding: '0.75rem 1.5rem', backgroundColor: creating ? '#9ca3af' : '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: creating ? 'not-allowed' : 'pointer' }}
-                >
-                  {creating ? 'Creating...' : 'Create Album'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Albums Grid */}
+        {/* Albums grid */}
         {albums.length > 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1.5rem' }}>
+          <div className="fu-2" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(230px, 1fr))', gap:'18px' }}>
             {albums.map((album) => (
-              <div
-                key={album.id}
-                style={{ backgroundColor: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.07)', transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'pointer' }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px rgba(0,0,0,0.1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.07)'; }}
-              >
-                {/* Cover photo */}
-                <div
-                  onClick={() => router.push(`/albums/${album.id}`)}
-                  style={{ height: '180px', backgroundColor: '#f1f5f9', overflow: 'hidden' }}
-                >
-                  {album.cover_url ? (
-                    <img src={album.cover_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '3rem' }}>🖼️</div>
-                  )}
+              <div key={album.id} className="album-card">
+                {/* Cover — original router.push preserved */}
+                <div className="album-cover" onClick={() => router.push(`/albums/${album.id}`)}>
+                  {album.cover_url
+                    ? <img src={album.cover_url} alt="" />
+                    : <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(17,17,17,0.2)" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  }
                 </div>
 
-                {/* Info */}
-                <div style={{ padding: '1rem' }}>
-                  <div
-                    onClick={() => router.push(`/albums/${album.id}`)}
-                    style={{ fontWeight: '600', fontSize: '1.05rem', color: '#111827', marginBottom: '0.25rem' }}
-                  >
+                <div className="album-info">
+                  {/* Original router.push preserved */}
+                  <div className="album-name" onClick={() => router.push(`/albums/${album.id}`)}>
                     {album.name}
                   </div>
                   {album.description && (
-                    <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.5rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {album.description}
-                    </div>
+                    <div className="album-desc">{album.description}</div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>{album.photo_count} photo{album.photo_count !== '1' ? 's' : ''}</span>
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      {/* Share button */}
+                  <div className="album-meta">
+                    <span className="album-count">{album.photo_count} photo{album.photo_count !== '1' ? 's' : ''}</span>
+                    <div style={{ display:'flex', gap:6 }}>
+                      {/* Share — original onClick preserved */}
                       <button
+                        className="btn btn-share"
+                        style={{ padding:'6px 14px', fontSize:11 }}
                         onClick={(e) => { e.stopPropagation(); setSharingAlbum(album); setAlbumShareMsg(''); setAlbumShareUsername(''); }}
-                        style={{ padding: '0.3rem 0.75rem', backgroundColor: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer' }}
-                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#dbeafe'}
-                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
                       >
-                        🔗 Share
+                        Share
                       </button>
-                      {/* Delete button */}
+                      {/* Delete — original onClick preserved */}
                       <button
+                        className="btn btn-danger"
+                        style={{ padding:'6px 14px', fontSize:11 }}
                         onClick={(e) => { e.stopPropagation(); handleDelete(album.id); }}
                         disabled={deleting === album.id}
-                        style={{ padding: '0.3rem 0.75rem', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer' }}
-                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#fecaca'}
-                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
                       >
-                        {deleting === album.id ? '...' : 'Delete'}
+                        {deleting === album.id ? '…' : 'Delete'}
                       </button>
                     </div>
                   </div>
@@ -199,52 +282,95 @@ export default function Albums() {
             ))}
           </div>
         ) : (
-          <div style={{ textAlign: 'center', padding: '6rem 1rem', color: '#6b7280' }}>
-            <p style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>No albums yet</p>
-            <p>Create an album to organize your photos</p>
+          <div className="empty-state">
+            <div className="empty-icon">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgba(17,17,17,0.3)" strokeWidth="1.6" strokeLinecap="round"><path d="M3 7a2 2 0 0 1 2-2h3l2 2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            </div>
+            <p style={{ fontFamily:"'Instrument Serif',serif", fontSize:20, fontStyle:'italic', color:'rgba(17,17,17,0.45)', marginBottom:8 }}>No albums yet</p>
+            <p style={{ fontFamily:"'Syne',sans-serif", fontSize:13, color:'rgba(17,17,17,0.35)' }}>Create an album to organise your photos</p>
           </div>
         )}
       </main>
 
-      {/* Share Album Modal */}
-      {sharingAlbum && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '400px', boxShadow: '0 25px 50px rgba(0,0,0,0.2)' }}>
-            <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.3rem', fontWeight: '700' }}>Share Album</h2>
-            <p style={{ margin: '0 0 1.5rem', color: '#6b7280', fontSize: '0.9rem' }}>"{sharingAlbum.name}"</p>
+      {/* ── Create Album Modal — original handleCreate preserved ── */}
+      {showCreate && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <h2 className="modal-title">Create new album</h2>
 
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <div className="field">
+              <label className="field-label">Album name *</label>
               <input
+                className="field-input"
+                type="text"
+                value={newAlbum.name}
+                onChange={(e) => setNewAlbum({ ...newAlbum, name: e.target.value })}
+                placeholder="e.g. Summer 2025"
+              />
+            </div>
+            <div className="field">
+              <label className="field-label">Description (optional)</label>
+              <textarea
+                className="field-textarea"
+                value={newAlbum.description}
+                onChange={(e) => setNewAlbum({ ...newAlbum, description: e.target.value })}
+                placeholder="What's this album about?"
+                rows={3}
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button
+                className="btn btn-ghost"
+                onClick={() => { setShowCreate(false); setNewAlbum({ name:'', description:'' }); }}
+              >Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleCreate}
+                disabled={creating || !newAlbum.name.trim()}
+              >{creating ? 'Creating…' : 'Create album'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Share Album Modal — original handleShareAlbum preserved ── */}
+      {sharingAlbum && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth:400 }}>
+            <h2 className="modal-title">Share album</h2>
+            <p style={{ fontFamily:"'Syne',sans-serif", fontSize:13, color:'rgba(17,17,17,0.45)', marginBottom:20 }}>
+              "{sharingAlbum.name}"
+            </p>
+
+            <div className="share-row">
+              <input
+                className="share-input"
                 type="text"
                 value={albumShareUsername}
                 onChange={(e) => { setAlbumShareUsername(e.target.value); setAlbumShareMsg(''); }}
-                placeholder="Enter username..."
-                style={{ flex: 1, padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.95rem', outline: 'none' }}
-                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                placeholder="Enter username…"
                 onKeyDown={(e) => { if (e.key === 'Enter') handleShareAlbum(); }}
               />
               <button
+                className="btn btn-primary"
+                style={{ flexShrink:0 }}
                 onClick={handleShareAlbum}
                 disabled={albumSharing || !albumShareUsername.trim()}
-                style={{ padding: '0.75rem 1.25rem', backgroundColor: albumSharing ? '#9ca3af' : '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: albumSharing ? 'not-allowed' : 'pointer' }}
-              >
-                {albumSharing ? '...' : 'Share'}
-              </button>
+              >{albumSharing ? '…' : 'Share'}</button>
             </div>
 
             {albumShareMsg && (
-              <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: albumShareMsg.startsWith('✓') ? '#10b981' : '#dc2626' }}>
+              <p style={{ fontFamily:"'Syne',sans-serif", fontSize:12, fontWeight:500, color: albumShareMsg.startsWith('✓') ? '#2d8a5e' : '#c0392b', marginBottom:12 }}>
                 {albumShareMsg}
               </p>
             )}
 
             <button
+              className="btn btn-ghost"
+              style={{ width:'100%', justifyContent:'center', marginTop:4 }}
               onClick={() => { setSharingAlbum(null); setAlbumShareUsername(''); setAlbumShareMsg(''); }}
-              style={{ width: '100%', padding: '0.75rem', backgroundColor: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-            >
-              Close
-            </button>
+            >Close</button>
           </div>
         </div>
       )}
