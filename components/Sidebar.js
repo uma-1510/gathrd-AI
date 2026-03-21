@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
-// ── Original navItems — untouched ──
+
 const navItems = [
   { href: '/',        label: 'Home',          icon: HomeIcon    },
   { href: '/gallery', label: 'Gallery',        icon: GalleryIcon },
