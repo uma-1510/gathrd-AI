@@ -36,7 +36,8 @@ export default function Search() {
     setHistory(h => [trimmed, ...h.filter(x => x !== trimmed)].slice(0, 10));
 
     try {
-      const res  = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`);
+      const tz = new Date().getTimezoneOffset();
+      const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}&tz=${tz}`);
       const data = await res.json();
       setResults(data);
     } catch (err) {

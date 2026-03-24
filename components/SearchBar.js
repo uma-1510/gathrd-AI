@@ -1,46 +1,15 @@
 'use client';
 
-/**
- * components/SearchBar.jsx
- *
- * Drop-in search bar for the gallery page.
- * Calls GET /api/search?q=... and returns results via onResults callback.
- *
- * Usage in gallery/page.js:
- *
- *   import SearchBar from '../../components/SearchBar';
- *
- *   // In your state:
- *   const [searchResults, setSearchResults] = useState(null);
- *   // null = no search active, [] = search returned nothing, [...] = results
- *
- *   // In your JSX (add after the header row, before the photo grid):
- *   <SearchBar
- *     onResults={setSearchResults}
- *     onClear={() => setSearchResults(null)}
- *   />
- *
- *   // Then in your photo grid:
- *   // Replace `photos` with `searchResults ?? photos`
- *   // This means: show search results if a search is active, else show all photos
- *
- * Props:
- *   onResults(photos) — called with the array of matching photos (or [] if none)
- *   onClear()         — called when user clears the search
- */
-
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 export default function SearchBar({ onResults, onClear }) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [resultCount, setResultCount] = useState(null); // null = no search yet
+  const [resultCount, setResultCount] = useState(null);
   const [isActive, setIsActive] = useState(false);
   const debounceRef = useRef(null);
   const inputRef = useRef(null);
-
-  // ── Search logic ──────────────────────────────────────────────────────────
 
   const runSearch = useCallback(async (q) => {
     if (!q.trim() || q.trim().length < 2) {
@@ -54,7 +23,11 @@ export default function SearchBar({ onResults, onClear }) {
     setError('');
 
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}&limit=50`);
+      // Pass browser timezone offset so the server resolves "today" correctly
+      const tz = new Date().getTimezoneOffset();
+      const res = await fetch(
+        `/api/search?q=${encodeURIComponent(q.trim())}&limit=50&tz=${tz}`
+      );
       const data = await res.json();
 
       if (!res.ok) {
@@ -72,7 +45,6 @@ export default function SearchBar({ onResults, onClear }) {
     }
   }, [onResults, onClear]);
 
-  // Debounce: wait 400ms after user stops typing before searching
   const handleChange = (e) => {
     const val = e.target.value;
     setQuery(val);
@@ -97,7 +69,6 @@ export default function SearchBar({ onResults, onClear }) {
     inputRef.current?.focus();
   };
 
-  // Also search on Enter key immediately (skip debounce)
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       clearTimeout(debounceRef.current);
@@ -109,16 +80,12 @@ export default function SearchBar({ onResults, onClear }) {
     }
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => clearTimeout(debounceRef.current);
   }, []);
 
-  // ── UI ───────────────────────────────────────────────────────────────────
-
   return (
     <div style={{ marginBottom: '1.5rem' }}>
-      {/* Search input row */}
       <div
         style={{
           display: 'flex',
@@ -126,35 +93,18 @@ export default function SearchBar({ onResults, onClear }) {
           gap: '0.75rem',
           padding: '0.75rem 1.1rem',
           backgroundColor: 'white',
-          border: `1.5px solid ${isActive ? '#2563eb' : '#e5e7eb'}`,
-          borderRadius: '12px',
-          boxShadow: isActive
-            ? '0 0 0 3px rgba(37,99,235,0.1)'
-            : '0 2px 6px rgba(0,0,0,0.05)',
-          transition: 'all 0.2s ease',
+          border: `1.5px solid ${isActive ? 'rgba(17,17,17,0.4)' : 'rgba(17,17,17,0.12)'}`,
+          borderRadius: '100px',
+          transition: 'border-color 0.2s',
         }}
+        onClick={() => inputRef.current?.focus()}
       >
         {/* Search icon */}
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={loading ? '#2563eb' : '#9ca3af'}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{
-            flexShrink: 0,
-            transition: 'stroke 0.2s',
-            animation: loading ? 'pulse 1s ease-in-out infinite' : 'none',
-          }}
-        >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+          stroke="rgba(17,17,17,0.35)" strokeWidth="2" strokeLinecap="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
 
-        {/* Input */}
         <input
           ref={inputRef}
           type="text"
@@ -163,114 +113,67 @@ export default function SearchBar({ onResults, onClear }) {
           onKeyDown={handleKeyDown}
           onFocus={() => setIsActive(true)}
           onBlur={() => setIsActive(false)}
-          placeholder="Search your photos… try 'birthday party' or 'beach at sunset'"
+          placeholder="Search photos — try 'best photos today' or 'beach trip last summer'…"
           style={{
             flex: 1,
             border: 'none',
             outline: 'none',
-            fontSize: '0.95rem',
-            color: '#111827',
-            backgroundColor: 'transparent',
-            fontFamily: 'inherit',
+            background: 'transparent',
+            fontFamily: "'Syne', sans-serif",
+            fontSize: 13,
+            color: '#111',
           }}
         />
 
-        {/* Loading spinner */}
-        {loading && (
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            style={{ flexShrink: 0, animation: 'spin 0.8s linear infinite' }}
-          >
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-          </svg>
-        )}
-
         {/* Clear button */}
-        {query && !loading && (
+        {query && (
           <button
             onClick={handleClear}
             style={{
-              flexShrink: 0,
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#9ca3af',
-              padding: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: '4px',
-              transition: 'color 0.15s',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'rgba(17,17,17,0.4)', fontSize: 18, lineHeight: 1,
+              padding: '0 2px',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#374151')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#9ca3af')}
-            title="Clear search"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            ×
           </button>
+        )}
+
+        {/* Loading spinner */}
+        {loading && (
+          <div style={{
+            width: 16, height: 16, borderRadius: '50%',
+            border: '2px solid rgba(17,17,17,0.12)',
+            borderTopColor: '#111',
+            animation: 'spin 0.7s linear infinite',
+            flexShrink: 0,
+          }} />
         )}
       </div>
 
-      {/* Result count / error feedback */}
-      {(resultCount !== null || error) && (
-        <div
-          style={{
-            marginTop: '0.5rem',
-            paddingLeft: '0.25rem',
-            fontSize: '0.82rem',
-            color: error ? '#dc2626' : resultCount === 0 ? '#6b7280' : '#2563eb',
-            fontWeight: '500',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-          }}
-        >
-          {error ? (
-            <>⚠ {error}</>
-          ) : resultCount === 0 ? (
-            <>No photos found for "{query}" — try different words</>
-          ) : (
-            <>
-              <span style={{ fontWeight: '700' }}>{resultCount}</span>
-              {resultCount === 1 ? ' photo' : ' photos'} matched
-              <span style={{ color: '#9ca3af', fontWeight: '400' }}>· ordered by relevance</span>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Hint text: only show when not searching */}
-      {!query && !loading && (
-        <p
-          style={{
-            marginTop: '0.5rem',
-            paddingLeft: '0.25rem',
-            fontSize: '0.78rem',
-            color: '#9ca3af',
-          }}
-        >
-          AI-powered · searches by meaning, not just keywords
+      {/* Result count / error */}
+      {!loading && resultCount !== null && (
+        <p style={{
+          fontFamily: "'Syne', sans-serif", fontSize: 12,
+          color: 'rgba(17,17,17,0.4)', marginTop: 8, paddingLeft: 4,
+        }}>
+          {resultCount === 0
+            ? 'No photos found'
+            : `${resultCount} photo${resultCount !== 1 ? 's' : ''} found`}
         </p>
       )}
 
-      {/* CSS animations */}
+      {error && (
+        <p style={{
+          fontFamily: "'Syne', sans-serif", fontSize: 12,
+          color: '#c0392b', marginTop: 8, paddingLeft: 4,
+        }}>
+          {error}
+        </p>
+      )}
+
       <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

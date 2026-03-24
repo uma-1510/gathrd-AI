@@ -7,7 +7,7 @@ export async function POST(req, { params }) {
     const session = await auth();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { id } = params;
+    const { id } = await params;
     const { photoIds } = await req.json();
 
     for (const photoId of photoIds) {
