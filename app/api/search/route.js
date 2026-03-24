@@ -84,7 +84,8 @@ export async function GET(req) {
       try {
         const result = await pool.query(sql, values);
         // FIX: threshold raised from 0.35 to 0.45; lower when date/person filters active
-        const threshold = (intent.hasDateFilter || intent.hasPersonFilter) ? 0.3 : 0.45;
+        const hasExactFilters = intent.hasDateFilter || intent.hasPersonFilter;
+        const threshold = hasExactFilters ? 0.25 : 0.40;
         photos = result.rows.filter(r => r.similarity >= threshold);
       } catch (err) {
         console.error("Vector search failed:", err.message);
@@ -115,7 +116,20 @@ export async function GET(req) {
 
     if (intent.qualityFilter === "best") {
       photos.sort((a, b) => {
-        const score = (p) => (p.width || 0) * (p.height || 0) / 1_000_000 + (p.face_count > 0 ? 2 : 0) + (p.similarity || 0) * 3;
+        const score = (p) => {
+            let s = (p.similarity || 0) * 5;                          // semantic weight
+            if (p.face_count > 0) s += 1.5;                           // has faces
+            if (intent.qualityFilter === "best") {
+              s += ((p.width || 0) * (p.height || 0)) / 2_000_000;   // resolution bonus
+            }
+
+            // Event keyword bonus: if description contains queried event words
+              const desc = (p.ai_description || "").toLowerCase();
+              for (const kw of (intent.eventKeywords || [])) {
+                if (desc.includes(kw)) s += 2;
+              }
+              return s;
+            };
         return score(b) - score(a);
       });
     }

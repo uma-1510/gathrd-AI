@@ -1,4 +1,4 @@
-// app/api/debug/reindex/route.js — uses shared modules, no inline duplicates
+// app/api/debug/reindex/route.js
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import pool from "@/lib/db";
@@ -6,9 +6,8 @@ import supabaseAdmin from "@/lib/supabaseAdmin";
 import { captionImage, embedText, toSqlVector } from "@/lib/hf";
 import { buildDescription } from "@/lib/description";
 
-// ── DELETED: inline captionWithBLIP — now uses captionImage from lib/hf.js
-// ── DELETED: inline buildDescription — now imported from lib/description.js
 
+// GET /api/debug/reindex?limit=50&force=true&recaption=true
 export async function GET(req) {
   try {
     const session = await auth();
@@ -17,15 +16,25 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") ?? "10");
     const force = searchParams.get("force") === "true";
+    const recaptionOnly = searchParams.get("recaption") === "true";
 
-    const whereClause = force
-      ? "WHERE uploaded_by = $1"
-      : "WHERE uploaded_by = $1 AND (ai_description IS NULL OR embedding IS NULL)";
+    // Target: force=all, recaption=flagged photos, default=missing embeddings/descriptions
+    let whereClause;
+    if (force) {
+      whereClause = "WHERE p.uploaded_by = $1";
+    } else if (recaptionOnly) {
+      whereClause = "WHERE p.uploaded_by = $1 AND (p.needs_recaption = true OR p.ai_description LIKE 'Photo:%')";
+    } else {
+      whereClause = "WHERE p.uploaded_by = $1 AND (p.embedding IS NULL OR p.ai_description IS NULL OR p.needs_recaption = true)";
+    }
 
     const photos = await pool.query(
-      `SELECT id, filename, storage_path, camera_make, camera_model,
-              date_taken, face_count, dominant_emotion
-       FROM photos ${whereClause} ORDER BY uploaded_at DESC LIMIT $2`,
+      `SELECT p.id, p.filename, p.storage_path, p.camera_make, p.camera_model,
+              p.date_taken, p.face_count, p.dominant_emotion, p.latitude, p.longitude,
+              p.ai_description, p.needs_recaption
+       FROM photos p
+       ${whereClause}
+       ORDER BY p.uploaded_at DESC LIMIT $2`,
       [session.user.username, limit]
     );
 
@@ -40,39 +49,66 @@ export async function GET(req) {
       try {
         if (!photo.storage_path) { entry.status = "no_storage_path"; results.push(entry); continue; }
 
+        // Download from Supabase
         const { data: fileData, error: dlErr } = await supabaseAdmin.storage
           .from("photos").download(photo.storage_path);
         if (dlErr || !fileData) { entry.status = "download_error"; entry.error = dlErr?.message; results.push(entry); continue; }
-
         const imageBuffer = Buffer.from(await fileData.arrayBuffer());
 
+        // BLIP caption (with retry via lib/hf.js)
         let caption = null;
         try {
-          caption = await captionImage(imageBuffer); // FIX: uses lib/hf.js with retry
+          caption = await captionImage(imageBuffer);
         } catch (err) {
           console.error(`BLIP failed for photo ${photo.id}:`, err.message);
         }
 
-        // FIX: uses shared buildDescription with same signature as upload route
-        const description = buildDescription({
+        // Get people names tagged to this photo (from both tables)
+        const peopleResult = await pool.query(
+          `SELECT DISTINCT per.name FROM people per WHERE per.username = $2
+             AND (EXISTS (SELECT 1 FROM photo_people pp WHERE pp.photo_id = $1 AND pp.person_id = per.id)
+               OR EXISTS (SELECT 1 FROM face_tags ft WHERE ft.photo_id = $1 AND ft.person_id = per.id))`,
+          [photo.id, session.user.username]
+        );
+        const peopleNames = peopleResult.rows.map(r => r.name);
+
+        // Build description with Phase 2 enrichment
+        const { description, needsRecaption } = buildDescription({
           caption,
           filename: photo.filename,
-          exif: { DateTimeOriginal: photo.date_taken, Make: photo.camera_make, Model: photo.camera_model },
+          exif: {
+            DateTimeOriginal: photo.date_taken,
+            Make: photo.camera_make,
+            Model: photo.camera_model,
+            latitude: photo.latitude,
+            longitude: photo.longitude,
+          },
           faceCount: photo.face_count || 0,
           emotion: photo.dominant_emotion,
-          peopleNames: [],
+          peopleNames,
         });
 
-        const embedding = await embedText(description); // FIX: was getEmbedding
+        // Embed
+        let embeddingValue = null;
+        try {
+          const vec = await embedText(description);
+          embeddingValue = toSqlVector(vec);
+        } catch (err) {
+          console.error(`Embedding failed for photo ${photo.id}:`, err.message);
+        }
 
+        // Update DB — clear needs_recaption flag if we got a good caption
         await pool.query(
-          "UPDATE photos SET ai_description = $1, embedding = $2::vector WHERE id = $3",
-          [description, toSqlVector(embedding), photo.id] // FIX: was embeddingToSql
+          `UPDATE photos SET ai_description = $1, embedding = $2::vector, needs_recaption = $3 WHERE id = $4`,
+          [description, embeddingValue, needsRecaption, photo.id]
         );
 
         entry.status = "indexed";
-        entry.caption = caption;
+        entry.caption = caption || "(fallback)";
         entry.description = description;
+        entry.needsRecaption = needsRecaption;
+        entry.hasEmbedding = !!embeddingValue;
+        entry.peopleFound = peopleNames;
       } catch (err) {
         entry.status = "error";
         entry.error = err.message;
@@ -83,10 +119,12 @@ export async function GET(req) {
     return NextResponse.json({
       processed: results.length,
       indexed: results.filter(r => r.status === "indexed").length,
+      stillNeedRecaption: results.filter(r => r.needsRecaption).length,
       errors: results.filter(r => r.status === "error").length,
       results,
     });
   } catch (err) {
+    console.error("Reindex error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

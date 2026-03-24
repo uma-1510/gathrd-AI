@@ -10,9 +10,6 @@ import { captionImage, embedText, toSqlVector } from "@/lib/hf";
 import { buildDescription } from "@/lib/description";
 import { matchFaceToPeople } from "@/lib/faceMatcher";
 
-// ── DELETED: captionWithBLIP — now uses captionImage from lib/hf.js (has retry logic)
-// ── DELETED: buildDescription — now imported from lib/description.js
-// ── DELETED: euclidean, matchFaceToPeople — now imported from lib/faceMatcher.js
 
 export async function POST(req) {
   try {
@@ -91,7 +88,7 @@ export async function POST(req) {
       }
 
       // FIX: uses shared buildDescription from lib/description.js
-      const description = buildDescription({ caption, filename: file.name, exif, faceCount, emotion, peopleNames });
+      const { description, needsRecaption } = buildDescription({ caption, filename: file.name, exif, faceCount, emotion, peopleNames });
 
       // FIX: uses embedText/toSqlVector (not getEmbedding/embeddingToSql)
       let embeddingValue = null;
@@ -107,15 +104,15 @@ export async function POST(req) {
           user_id, filename, url, uploaded_by, storage_path,
           mime_type, file_size, width, height, format,
           date_taken, camera_make, camera_model, latitude, longitude,
-          face_count, dominant_emotion, ai_description, embedding
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::vector) RETURNING id`,
+          face_count, dominant_emotion, ai_description, embedding, needs_recaption
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::vector,$20) RETURNING id`,
         [
           userId, filename, url, session.user.username, storagePath,
           "image/jpeg", file.size || null,
           imageMeta.width || null, imageMeta.height || null, imageMeta.format || null,
           exif?.DateTimeOriginal || null, exif?.Make || null, exif?.Model || null,
           exif?.latitude || null, exif?.longitude || null,
-          faceCount, emotion, description, embeddingValue,
+          faceCount, emotion, description, embeddingValue,needsRecaption
         ]
       );
 
