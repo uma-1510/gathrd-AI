@@ -1,7 +1,7 @@
 // app/api/photos/upload/route.js
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import supabaseAdmin from "@/lib/supabaseAdmin";
+import getSupabaseAdmin from "@/lib/supabaseAdmin";
 import pool from "@/lib/db";
 import { initDb } from "@/lib/initDb";
 import sharp from "sharp";
@@ -92,13 +92,13 @@ export async function POST(req) {
       }
 
       // ── Upload to Supabase ────────────────────────────────────────────────
-      const { error: uploadError } = await supabaseAdmin.storage
+      const { error: uploadError } = await getSupabaseAdmin.storage
         .from("photos")
         .upload(storagePath, uploadBuffer, { contentType: "image/jpeg", upsert: false });
 
       if (uploadError) { console.error("Upload error:", uploadError); continue; }
 
-      const { data: urlData } = supabaseAdmin.storage.from("photos").getPublicUrl(storagePath);
+      const { data: urlData } = getSupabaseAdmin.storage.from("photos").getPublicUrl(storagePath);
       const url = urlData.publicUrl;
 
       // ── Face data from client ─────────────────────────────────────────────

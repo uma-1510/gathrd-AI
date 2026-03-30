@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import pool from "@/lib/db";
-import supabaseAdmin from "@/lib/supabaseAdmin";
+import getSupabaseAdmin from "@/lib/supabaseAdmin";
 import { captionImage, embedText, toSqlVector } from "@/lib/hf";
 import { buildDescription } from "@/lib/description";
 
@@ -50,7 +50,7 @@ export async function GET(req) {
         if (!photo.storage_path) { entry.status = "no_storage_path"; results.push(entry); continue; }
 
         // Download from Supabase
-        const { data: fileData, error: dlErr } = await supabaseAdmin.storage
+        const { data: fileData, error: dlErr } = await getSupabaseAdmin.storage
           .from("photos").download(photo.storage_path);
         if (dlErr || !fileData) { entry.status = "download_error"; entry.error = dlErr?.message; results.push(entry); continue; }
         const imageBuffer = Buffer.from(await fileData.arrayBuffer());

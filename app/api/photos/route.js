@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import pool from "@/lib/db";
 import { initDb } from "@/lib/initDb";
-import supabaseAdmin from "@/lib/supabaseAdmin";
+import getSupabaseAdmin from "@/lib/supabaseAdmin";
 
 export async function GET() {
   try {
@@ -31,7 +31,7 @@ export async function GET() {
         if (!photo.storage_path) return photo; // no path stored, return as-is
 
         try {
-          const { data, error } = await supabaseAdmin.storage
+          const { data, error } = await getSupabaseAdmin.storage
             .from("photos")
             .createSignedUrl(photo.storage_path, ONE_YEAR);
 

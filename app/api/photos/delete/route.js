@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import supabaseAdmin from "@/lib/supabaseAdmin";
+import getSupabaseAdmin from "@/lib/supabaseAdmin";
 import pool from "@/lib/db";
 
 export async function DELETE(req) {
@@ -35,7 +35,7 @@ export async function DELETE(req) {
       .map(p => p.storage_path);
 
     if (storagePaths.length > 0) {
-      const { error: storageError } = await supabaseAdmin.storage
+      const { error: storageError } = await getSupabaseAdmin.storage
         .from("photos")
         .remove(storagePaths);
 

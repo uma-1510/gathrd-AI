@@ -11,7 +11,8 @@ const navItems = [
   { href: '/groups',  label: 'Groups',         icon: GroupsIcon  },
   { href: '/shared',  label: 'Shared With Me', icon: SharedIcon  },
   { href: '/people',  label: 'People',         icon: PeopleIcon  },
-  { href: '/search',  label: 'Search & Filter',icon: SearchIcon  },
+  // { href: '/search',  label: 'Search & Filter',icon: SearchIcon  },
+  { href: '/agent', label: 'AI Assistant', icon: AgentIcon },
 ];
 
 export default function Sidebar() {
@@ -197,4 +198,7 @@ function SearchIcon({ active }) {
 }
 function AdminIcon({ active }) {
   return <svg width="16" height="16" viewBox="0 0 24 24" {...ic(active)}><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>;
+}
+function AgentIcon({ active }) {
+  return <svg width="16" height="16" viewBox="0 0 24 24" {...ic(active)}><path d="M12 2a8 8 0 0 1 8 8c0 3.5-2 6.5-5 7.7V20h-6v-2.3C6 16.5 4 13.5 4 10a8 8 0 0 1 8-8z"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="17" x2="12" y2="20"/></svg>;
 }

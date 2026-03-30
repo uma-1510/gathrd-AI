@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import pool from "@/lib/db";
-import supabaseAdmin from "@/lib/supabaseAdmin";
+import getSupabaseAdmin from "@/lib/supabaseAdmin";
 
 export async function GET(req, { params }) {
   try {
@@ -57,7 +57,7 @@ export async function DELETE(req, { params }) {
       .map(p => p.storage_path);
 
     if (storagePaths.length > 0) {
-      await supabaseAdmin.storage.from("photos").remove(storagePaths);
+      await getSupabaseAdmin.storage.from("photos").remove(storagePaths);
     }
 
     // Delete user (cascades to photos, albums, album_photos)

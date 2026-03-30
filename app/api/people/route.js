@@ -2,7 +2,48 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import pool from "@/lib/db";
-import { euclidean } from "@/lib/faceMatcher";
+import { embedText, toSqlVector } from "@/lib/hf";
+import { updateDescriptionWithPeople } from "@/lib/description";
+
+// ── Shared helper: re-embed a photo after its people tags change ─────────────
+async function reEmbedPhoto(photoId, username) {
+  try {
+    const photo = await pool.query(
+      "SELECT ai_description FROM photos WHERE id = $1 AND uploaded_by = $2",
+      [photoId, username]
+    );
+    if (!photo.rows.length) return;
+
+    const taggedPeople = await pool.query(
+      `SELECT DISTINCT per.name FROM people per WHERE per.username = $1
+         AND (
+           EXISTS (SELECT 1 FROM photo_people pp WHERE pp.photo_id = $2 AND pp.person_id = per.id)
+           OR
+           EXISTS (SELECT 1 FROM face_tags   ft WHERE ft.photo_id = $2 AND ft.person_id = per.id)
+         )`,
+      [username, photoId]
+    );
+
+    const personNames = taggedPeople.rows.map(r => r.name);
+    const newDesc = updateDescriptionWithPeople(photo.rows[0].ai_description, personNames);
+
+    try {
+      const vec = await embedText(newDesc);
+      await pool.query(
+        "UPDATE photos SET ai_description = $1, embedding = $2::vector WHERE id = $3",
+        [newDesc, toSqlVector(vec), photoId]
+      );
+    } catch (embedErr) {
+      console.error(`Re-embed failed for photo ${photoId}:`, embedErr.message);
+      await pool.query(
+        "UPDATE photos SET ai_description = $1 WHERE id = $2",
+        [newDesc, photoId]
+      );
+    }
+  } catch (err) {
+    console.error(`reEmbedPhoto error for photo ${photoId}:`, err.message);
+  }
+}
 
 // GET /api/people — list all named people for this user
 export async function GET() {
@@ -32,124 +73,51 @@ export async function GET() {
   }
 }
 
-// POST /api/people — create or OVERWRITE a named person for a cluster
-// If the cluster was previously tagged with a different name, the old record
-// is fully replaced: old photo_people + face_tags rows are deleted and
-// rewritten under the new name.
-// Body: { name, faceDescriptor, coverPhotoUrl?, photoIds?, oldPersonId? }
+// POST /api/people — create or update a named person, overwriting any previous
+//                    tag on the same photos (no duplicate tagging)
+// Body: { name, faceDescriptor: number[], coverPhotoUrl?, photoIds?: number[] }
 export async function POST(req) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { name, faceDescriptor, coverPhotoUrl, photoIds, oldPersonId } = await req.json();
+    const { name, faceDescriptor, coverPhotoUrl, photoIds } = await req.json();
 
-    if (!name?.trim())
-      return NextResponse.json({ error: "Name required" }, { status: 400 });
-    if (!Array.isArray(faceDescriptor) || faceDescriptor.length === 0)
+    if (!name?.trim()) return NextResponse.json({ error: "Name required" }, { status: 400 });
+    if (!Array.isArray(faceDescriptor) || faceDescriptor.length === 0) {
       return NextResponse.json({ error: "faceDescriptor required" }, { status: 400 });
+    }
 
     const username = session.user.username;
 
-    // ── Step 1: If there was a previous tag on this cluster, delete it cleanly
-    // This handles the "re-tag" case: user tagged a cluster as "John", now
-    // wants to rename/replace to "Pooja". We wipe John's photo links for
-    // this cluster's photos and remove John's record if it has no photos left.
-    if (oldPersonId) {
-      // Remove photo links for this cluster's photos from the old person
-      if (photoIds?.length) {
-        await pool.query(
-          `DELETE FROM photo_people WHERE person_id = $1 AND photo_id = ANY($2)`,
-          [oldPersonId, photoIds]
-        );
-        await pool.query(
-          `DELETE FROM face_tags WHERE person_id = $1 AND photo_id = ANY($2)`,
-          [oldPersonId, photoIds]
-        );
-      }
-
-      // If the old person now has zero photos linked, delete the person record too
-      const remaining = await pool.query(
-        `SELECT COUNT(*) FROM (
-           SELECT photo_id FROM photo_people WHERE person_id = $1
-           UNION
-           SELECT photo_id FROM face_tags WHERE person_id = $1
-         ) t`,
-        [oldPersonId]
-      );
-      if (parseInt(remaining.rows[0].count, 10) === 0) {
-        await pool.query(
-          `DELETE FROM people WHERE id = $1 AND username = $2`,
-          [oldPersonId, username]
-        );
-      }
-    }
-
-    // ── Step 2: Upsert the person record under the new name
-    // ON CONFLICT (username, name) means if "Pooja" already exists, we just
-    // update the face_descriptor — merging this cluster into the existing person.
+    // Upsert person (update descriptor + cover if name already exists)
     const result = await pool.query(
       `INSERT INTO people (username, name, face_descriptor, cover_photo_url)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (username, name)
-       DO UPDATE SET
-         face_descriptor  = $3,
-         cover_photo_url  = COALESCE($4, people.cover_photo_url)
+       DO UPDATE SET face_descriptor = $3, cover_photo_url = COALESCE($4, people.cover_photo_url)
        RETURNING *`,
       [username, name.trim(), faceDescriptor, coverPhotoUrl || null]
     );
 
     const person = result.rows[0];
 
-    // ── Step 3: Link this cluster's explicit photos
     if (photoIds?.length) {
       for (const photoId of photoIds) {
+        // Remove any existing tag on this photo first (prevents duplicates,
+        // and allows re-tagging the same photo with a different name)
+        await pool.query("DELETE FROM photo_people WHERE photo_id = $1", [photoId]);
+        await pool.query("DELETE FROM face_tags WHERE photo_id = $1", [photoId]);
+
+        // Insert the new tag
         await pool.query(
-          `INSERT INTO photo_people (photo_id, person_id, confidence)
-           VALUES ($1, $2, 1.0)
-           ON CONFLICT DO NOTHING`,
+          `INSERT INTO photo_people (photo_id, person_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
           [photoId, person.id]
         );
+
+        // Re-embed with the updated person name
+        await reEmbedPhoto(photoId, username);
       }
-    }
-
-    // ── Step 4: Backfill — auto-link any other photos whose stored face
-    // descriptors match the new centroid, so future uploads and missed
-    // photos are all attributed to the correct person.
-    try {
-      const MATCH_THRESHOLD = 0.6;
-      const photosRes = await pool.query(
-        `SELECT id, face_descriptors FROM photos
-         WHERE uploaded_by = $1 AND face_descriptors IS NOT NULL`,
-        [username]
-      );
-
-      const backfillIds = [];
-      for (const photo of photosRes.rows) {
-        let descriptors = photo.face_descriptors;
-        if (typeof descriptors === "string") {
-          try { descriptors = JSON.parse(descriptors); } catch { continue; }
-        }
-        if (!Array.isArray(descriptors) || descriptors.length === 0) continue;
-
-        const isMatch = descriptors.some(
-          (d) => Array.isArray(d) && euclidean(d, faceDescriptor) < MATCH_THRESHOLD
-        );
-        if (isMatch) backfillIds.push(photo.id);
-      }
-
-      for (const photoId of backfillIds) {
-        await pool.query(
-          `INSERT INTO photo_people (photo_id, person_id, confidence)
-           VALUES ($1, $2, 0.85)
-           ON CONFLICT DO NOTHING`,
-          [photoId, person.id]
-        );
-      }
-
-      console.log(`[people POST] Backfilled ${backfillIds.length} photos for "${name}"`);
-    } catch (backfillErr) {
-      console.error("[people POST] Backfill error (non-fatal):", backfillErr.message);
     }
 
     return NextResponse.json({ person }, { status: 201 });
@@ -159,32 +127,61 @@ export async function POST(req) {
   }
 }
 
-// DELETE /api/people — delete a person and ALL their photo links
-// Body: { personId }
+// DELETE /api/people — un-tag a person from specific photos, or fully delete them
+// Body: { personId: number, photoIds?: number[] }
+//   - with photoIds → removes tag only from those photos, re-embeds them
+//   - without photoIds → removes from all photos and deletes the person record
 export async function DELETE(req) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { personId } = await req.json();
+    const { personId, photoIds } = await req.json();
     if (!personId) return NextResponse.json({ error: "personId required" }, { status: 400 });
 
     const username = session.user.username;
 
-    // Verify ownership before deleting
-    const check = await pool.query(
-      `SELECT id FROM people WHERE id = $1 AND username = $2`,
+    // Verify this person belongs to the session user
+    const personCheck = await pool.query(
+      "SELECT id FROM people WHERE id = $1 AND username = $2",
       [personId, username]
     );
-    if (!check.rows.length)
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!personCheck.rows.length) {
+      return NextResponse.json({ error: "Person not found" }, { status: 404 });
+    }
 
-    // Cascade delete photo links, then the person record
-    await pool.query(`DELETE FROM photo_people WHERE person_id = $1`, [personId]);
-    await pool.query(`DELETE FROM face_tags   WHERE person_id = $1`, [personId]);
-    await pool.query(`DELETE FROM people      WHERE id = $1 AND username = $2`, [personId, username]);
+    if (photoIds?.length) {
+      // Un-tag from specific photos only
+      for (const photoId of photoIds) {
+        await pool.query(
+          "DELETE FROM photo_people WHERE photo_id = $1 AND person_id = $2",
+          [photoId, personId]
+        );
+        await pool.query(
+          "DELETE FROM face_tags WHERE photo_id = $1 AND person_id = $2",
+          [photoId, personId]
+        );
+        await reEmbedPhoto(photoId, username);
+      }
+    } else {
+      // No photoIds → delete person from all photos and remove the record entirely
+      const allPhotos = await pool.query(
+        `SELECT DISTINCT photo_id FROM photo_people WHERE person_id = $1
+         UNION
+         SELECT DISTINCT photo_id FROM face_tags WHERE person_id = $1`,
+        [personId]
+      );
 
-    return NextResponse.json({ message: "Deleted" });
+      await pool.query("DELETE FROM photo_people WHERE person_id = $1", [personId]);
+      await pool.query("DELETE FROM face_tags WHERE person_id = $1", [personId]);
+      await pool.query("DELETE FROM people WHERE id = $1 AND username = $2", [personId, username]);
+
+      for (const row of allPhotos.rows) {
+        await reEmbedPhoto(row.photo_id, username);
+      }
+    }
+
+    return NextResponse.json({ message: "Tag removed" });
   } catch (err) {
     console.error("DELETE /api/people error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

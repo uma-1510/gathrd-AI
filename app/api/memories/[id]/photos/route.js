@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import pool from "@/lib/db";
-import supabaseAdmin from "@/lib/supabaseAdmin";
+import getSupabaseAdmin from "@/lib/supabaseAdmin";
 
 export async function GET(req, { params }) {
   try {
@@ -47,7 +47,7 @@ export async function GET(req, { params }) {
       photosRes.rows.map(async (photo) => {
         if (!photo.storage_path) return photo;
         try {
-          const { data, error } = await supabaseAdmin.storage
+          const { data, error } = await getSupabaseAdmin.storage
             .from("photos")
             .createSignedUrl(photo.storage_path, ONE_YEAR);
           if (error || !data?.signedUrl) return photo;
