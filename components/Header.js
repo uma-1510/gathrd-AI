@@ -17,7 +17,6 @@ export default function Header() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Close menu on outside click
   useEffect(() => {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
@@ -26,12 +25,10 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const navLinks = [
-    { href: '/gallery',  label: 'Gallery'  },
-    { href: '/people',   label: 'People'   },
-    { href: '/albums',   label: 'Albums'   },
-    { href: '/upload',   label: 'Upload'   },
-  ];
+  // const navLinks = [
+  //   { href: '/gallery', label: 'Gallery' },
+  //   { href: '/upload',  label: 'Upload'  },
+  // ];
 
   return (
     <>
@@ -62,6 +59,7 @@ export default function Header() {
         .header-nav {
           display: flex; align-items: center; gap: 4px;
           list-style: none;
+          margin: 0; padding: 0;
         }
         .header-nav a {
           font-family: 'Syne', sans-serif;
@@ -77,6 +75,25 @@ export default function Header() {
         .header-nav a.active {
           color: #111; font-weight: 600;
           background: rgba(17,17,17,0.07);
+        }
+
+        .header-search-btn {
+          display: flex; align-items: center; justify-content: center;
+          width: 36px; height: 36px;
+          border-radius: 50%;
+          border: 1px solid transparent;
+          background: transparent;
+          text-decoration: none;
+          transition: background 0.18s, border-color 0.18s;
+          margin-right: 4px;
+          flex-shrink: 0;
+        }
+        .header-search-btn:hover {
+          background: rgba(17,17,17,0.07);
+          border-color: rgba(17,17,17,0.1);
+        }
+        .header-search-btn.active {
+          background: rgba(17,17,17,0.09);
         }
 
         .avatar-btn {
@@ -155,43 +172,63 @@ export default function Header() {
         {/* Logo */}
         <Link href="/" className="header-logo">gathrd</Link>
 
-        {/* Nav links — desktop */}
-        <ul className="header-nav">
+        {/* Nav links */}
+        {/* <ul className="header-nav">
           {navLinks.map(({ href, label }) => (
             <li key={href}>
               <Link href={href} className={pathname === href ? 'active' : ''}>{label}</Link>
             </li>
           ))}
-        </ul>
+        </ul> */}
 
-        {/* User menu — original session logic intact */}
-        {session && (
-          <div style={{ position: 'relative' }} ref={menuRef}>
-            <button className="avatar-btn" onClick={() => setShowMenu(!showMenu)}>
-              <div className="avatar-circle">
-                {session.user.username?.[0]?.toUpperCase()}
-              </div>
-              {session.user.username}
-              <span className={`chevron${showMenu ? ' open' : ''}`}>▼</span>
-            </button>
+        {/* Right side: search icon + avatar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
 
-            {showMenu && (
-              <div className="dropdown">
-                <div className="dropdown-header">
-                  <div className="dropdown-label">Signed in as</div>
-                  <div className="dropdown-name">{session.user.username}</div>
+          {/* Search icon */}
+          <Link
+            href="/search"
+            className={`header-search-btn${pathname === '/search' ? ' active' : ''}`}
+            title="Search"
+          >
+            <svg
+              width="17" height="17" viewBox="0 0 24 24" fill="none"
+              stroke={pathname === '/search' ? '#111' : 'rgba(17,17,17,0.55)'}
+              strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="7"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </Link>
+
+          {/* User menu */}
+          {session && (
+            <div style={{ position: 'relative' }} ref={menuRef}>
+              <button className="avatar-btn" onClick={() => setShowMenu(!showMenu)}>
+                <div className="avatar-circle">
+                  {session.user.username?.[0]?.toUpperCase()}
                 </div>
-                {/* Original signOut call preserved exactly */}
-                <button
-                  className="dropdown-btn"
-                  onClick={() => signOut({ callbackUrl: '/login' })}
-                >
-                  <span>↩</span> Sign out
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+                {session.user.username}
+                <span className={`chevron${showMenu ? ' open' : ''}`}>▼</span>
+              </button>
+
+              {showMenu && (
+                <div className="dropdown">
+                  <div className="dropdown-header">
+                    <div className="dropdown-label">Signed in as</div>
+                    <div className="dropdown-name">{session.user.username}</div>
+                  </div>
+                  <button
+                    className="dropdown-btn"
+                    onClick={() => signOut({ callbackUrl: '/login' })}
+                  >
+                    <span>↩</span> Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
       </header>
     </>
   );

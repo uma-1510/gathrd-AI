@@ -67,78 +67,42 @@ export default function AlbumDetail() {
     setSaving(true);
     const currentIds = new Set(albumPhotos.map(p => p.id));
     const toAdd = [...selectedToAdd].filter(pid => !currentIds.has(pid));
-    const toRemove = [...currentIds].filter(pid => !selectedToAdd.has(pid));
-
     if (toAdd.length > 0) {
-      const res = await fetch(`/api/albums/${id}/photos`, {
+      await fetch(`/api/albums/${id}/photos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ photoIds: toAdd }),
       });
-      if (!res.ok) {
-        const d = await res.json();
-        alert(d.error || 'Failed to add photos');
-        setSaving(false);
-        return;
-      }
     }
-
-    // Only owner can remove photos — toRemove is only called from the modal
-    // which is only accessible to the owner (canAddPhotos check on the button
-    // doesn't gate removal — the API does)
-    if (toRemove.length > 0 && isOwner) {
-      await fetch(`/api/albums/${id}/photos`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photoIds: toRemove }),
-      });
-    }
-
-    await fetchAlbum();
     setShowAddPhotos(false);
-    setSelectedToAdd(new Set());
+    await fetchAlbum();
     setSaving(false);
   };
 
   const handleRemoveSelected = async () => {
-    if (!isOwner) return;
-    if (!confirm(`Remove ${selectedToRemove.size} photo${selectedToRemove.size > 1 ? 's' : ''} from album?`)) return;
+    if (!confirm(`Remove ${selectedToRemove.size} photo(s) from this album?`)) return;
     setSaving(true);
-    const res = await fetch(`/api/albums/${id}/photos`, {
+    await fetch(`/api/albums/${id}/photos`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ photoIds: [...selectedToRemove] }),
     });
-    if (!res.ok) {
-      const d = await res.json();
-      alert(d.error || 'Failed to remove photos');
-    } else {
-      await fetchAlbum();
-      setSelectedToRemove(new Set());
-      setSelectMode(false);
-    }
+    setSelectMode(false);
+    setSelectedToRemove(new Set());
+    await fetchAlbum();
     setSaving(false);
   };
 
-  // ── Download all photos as zip (client-side) ──────────────────────────────
   const handleDownloadAll = async () => {
+    if (albumPhotos.length === 0) return;
     setDownloading(true);
     try {
-      const res = await fetch(`/api/albums/${id}/download`);
-      const data = await res.json();
-      if (!data.photos?.length) { setDownloading(false); return; }
-
-      // Dynamically import jszip + file-saver (no bundle bloat unless used)
-      const [{ default: JSZip }, { saveAs }] = await Promise.all([
-        import('jszip'),
-        import('file-saver'),
-      ]);
-
+      const JSZip = (await import('jszip')).default;
+      const { saveAs } = await import('file-saver');
       const zip = new JSZip();
       const folder = zip.folder(album?.name || 'album');
-
       await Promise.all(
-        data.photos.map(async (photo, i) => {
+        albumPhotos.map(async (photo, i) => {
           try {
             const blob = await fetch(photo.url).then(r => r.blob());
             const ext = photo.url.split('.').pop().split('?')[0] || 'jpg';
@@ -146,7 +110,6 @@ export default function AlbumDetail() {
           } catch {}
         })
       );
-
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `${album?.name || 'album'}.zip`);
     } catch (err) {
@@ -194,14 +157,28 @@ export default function AlbumDetail() {
   };
 
   if (loading) return (
-    <><Header /><Sidebar />
-      <main style={{ marginLeft: '240px', marginTop: '64px', padding: '2.5rem', color: '#6b7280' }}>Loading…</main>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap');
+        body { background: #f2efe9; font-family: 'Syne', sans-serif; }
+      `}</style>
+      <Header /><Sidebar />
+      <main style={{ marginLeft: '240px', marginTop: '62px', padding: '36px 32px', minHeight: 'calc(100vh - 62px)', background: '#f2efe9', fontFamily: "'Syne', sans-serif", fontSize: 13, color: 'rgba(17,17,17,0.45)' }}>
+        Loading…
+      </main>
     </>
   );
 
   if (!album) return (
-    <><Header /><Sidebar />
-      <main style={{ marginLeft: '240px', marginTop: '64px', padding: '2.5rem', color: '#6b7280' }}>Album not found.</main>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap');
+        body { background: #f2efe9; font-family: 'Syne', sans-serif; }
+      `}</style>
+      <Header /><Sidebar />
+      <main style={{ marginLeft: '240px', marginTop: '62px', padding: '36px 32px', minHeight: 'calc(100vh - 62px)', background: '#f2efe9', fontFamily: "'Syne', sans-serif", fontSize: 13, color: 'rgba(17,17,17,0.45)' }}>
+        Album not found.
+      </main>
     </>
   );
 
@@ -209,57 +186,183 @@ export default function AlbumDetail() {
 
   return (
     <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap');
+        *, *::before, *::after { box-sizing: border-box; }
+        body { background: #f2efe9; font-family: 'Syne', sans-serif; }
+
+        @keyframes fadeUp  { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+        @keyframes scaleIn { from { opacity:0; transform:scale(0.96) translateY(-8px); } to { opacity:1; transform:scale(1) translateY(0); } }
+
+        .fu-1 { animation: fadeUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.05s both; }
+        .fu-2 { animation: fadeUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.14s both; }
+        .fu-3 { animation: fadeUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.22s both; }
+
+        .btn {
+          display: inline-flex; align-items: center; gap: 7px;
+          padding: 11px 22px; border-radius: 100px; border: none; cursor: pointer;
+          font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700;
+          letter-spacing: 0.05em; text-transform: uppercase;
+          transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+        }
+        .btn:hover    { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.1); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-primary  { background: #111; color: #f2efe9; }
+        .btn-ghost    { background: rgba(17,17,17,0.06); color: #111; border: 1.5px solid rgba(17,17,17,0.12); }
+        .btn-ghost:hover { background: rgba(17,17,17,0.1); }
+        .btn-danger   { background: rgba(220,38,38,0.07); color: #c0392b; border: 1.5px solid rgba(220,38,38,0.18); }
+        .btn-danger:hover { background: rgba(220,38,38,0.12); }
+        .btn-sm { padding: 7px 14px; font-size: 11px; }
+
+        .shared-badge {
+          display: inline-flex; align-items: center; gap: 5px;
+          background: rgba(17,17,17,0.06); color: rgba(17,17,17,0.6);
+          border: 1px solid rgba(17,17,17,0.1);
+          border-radius: 100px; padding: 3px 12px;
+          font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700;
+          letter-spacing: 0.05em; text-transform: uppercase;
+        }
+
+        .members-bar {
+          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+          padding: 12px 18px; margin-bottom: 28px;
+          background: #faf8f4; border: 1px solid rgba(17,17,17,0.08);
+          border-radius: 14px;
+        }
+        .member-chip {
+          display: inline-flex; align-items: center; gap: 5px;
+          border-radius: 100px; padding: 4px 12px;
+          font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700;
+        }
+        .member-chip.owner  { background: #111; color: #f2efe9; }
+        .member-chip.member { background: rgba(17,17,17,0.06); color: #111; border: 1px solid rgba(17,17,17,0.1); }
+
+        .chat-panel {
+          margin-top: 28px;
+          background: #faf8f4; border: 1px solid rgba(17,17,17,0.08);
+          border-radius: 16px; display: flex; flex-direction: column; max-height: 480px;
+        }
+        .chat-header {
+          padding: 14px 18px; border-bottom: 1px solid rgba(17,17,17,0.07);
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .chat-title {
+          font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+          color: #111; letter-spacing: 0.04em; text-transform: uppercase;
+        }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; }
+        .chat-input-row { padding: 12px 16px; border-top: 1px solid rgba(17,17,17,0.07); display: flex; gap: 8px; }
+        .chat-input {
+          flex: 1; padding: 10px 14px;
+          background: rgba(17,17,17,0.04); border: 1.5px solid rgba(17,17,17,0.12);
+          border-radius: 10px; outline: none; resize: none;
+          font-family: 'Syne', sans-serif; font-size: 13px; color: #111;
+          transition: border-color 0.18s;
+        }
+        .chat-input:focus { border-color: rgba(17,17,17,0.4); }
+
+        .modal-overlay {
+          position: fixed; inset: 0;
+          background: rgba(10,8,6,0.6); backdrop-filter: blur(6px);
+          z-index: 2000; display: flex; align-items: center; justify-content: center;
+          padding: 24px; animation: fadeIn 0.18s ease both;
+        }
+        .modal-card {
+          background: #faf8f4; border-radius: 20px;
+          width: 100%; max-width: 760px; max-height: 85vh;
+          display: flex; flex-direction: column;
+          box-shadow: 0 32px 80px rgba(0,0,0,0.22);
+          animation: scaleIn 0.28s cubic-bezier(0.22,1,0.36,1) both;
+        }
+        .modal-header {
+          padding: 20px 24px; border-bottom: 1px solid rgba(17,17,17,0.07);
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .modal-title {
+          font-family: 'Instrument Serif', serif; font-size: 22px;
+          font-weight: 400; font-style: italic; color: #111; margin: 0;
+        }
+      `}</style>
+
       <Header />
       <Sidebar />
-      <main style={{ marginLeft: '240px', marginTop: '64px', padding: '2.5rem 2rem', minHeight: 'calc(100vh - 64px)', backgroundColor: '#f8fafc' }}>
 
-        {/* ── Back + title ─────────────────────────────────────────────── */}
-        <div style={{ marginBottom: '1.5rem' }}>
+      <main style={{
+        marginLeft: '240px',
+        marginTop: '62px',
+        padding: '36px 32px',
+        minHeight: 'calc(100vh - 62px)',
+        background: '#f2efe9',
+      }}>
+
+        {/* ── Back + title ──────────────────────────────────────────────── */}
+        <div className="fu-1" style={{ marginBottom: 32 }}>
           <button
             onClick={() => router.push('/albums')}
-            style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.95rem', fontWeight: '500', padding: 0, marginBottom: '0.75rem' }}
+            className="btn btn-ghost btn-sm"
+            style={{ marginBottom: 20 }}
           >
             ← Back to Albums
           </button>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                <h1 style={{ fontSize: '2rem', fontWeight: '700', margin: 0, color: '#111827' }}>{album.name}</h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <p style={{
+                  fontFamily: "'Syne', sans-serif", fontSize: 11, fontWeight: 600,
+                  letterSpacing: '0.18em', textTransform: 'uppercase',
+                  color: 'rgba(17,17,17,0.35)', margin: 0,
+                }}>
+                  {isShared ? 'Shared album' : 'Your album'}
+                </p>
                 {isShared && (
-                  <span style={{ fontSize: '0.75rem', fontWeight: 700, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 100, padding: '3px 10px', whiteSpace: 'nowrap' }}>
-                    👥 Shared · {members.length} member{members.length !== 1 ? 's' : ''}
+                  <span className="shared-badge">
+                    👥 {members.length} member{members.length !== 1 ? 's' : ''}
                   </span>
                 )}
               </div>
-              {album.description && <p style={{ color: '#6b7280', margin: 0 }}>{album.description}</p>}
+              <h1 style={{
+                fontFamily: "'Instrument Serif', serif",
+                fontSize: 'clamp(26px, 3.5vw, 40px)',
+                fontWeight: 400, fontStyle: 'italic',
+                color: '#111', lineHeight: 1.1, letterSpacing: '-0.02em',
+                margin: 0,
+              }}>
+                {album.name}
+              </h1>
+              {album.description && (
+                <p style={{
+                  fontFamily: "'Syne', sans-serif", fontSize: 13,
+                  color: 'rgba(17,17,17,0.45)', marginTop: 6, marginBottom: 0,
+                }}>
+                  {album.description}
+                </p>
+              )}
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              {/* Download all */}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
               <button
+                className="btn btn-ghost"
                 onClick={handleDownloadAll}
                 disabled={downloading || albumPhotos.length === 0}
-                style={{ padding: '0.75rem 1.25rem', backgroundColor: 'white', color: '#374151', border: '1px solid #d1d5db', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', opacity: downloading ? 0.6 : 1 }}
               >
                 {downloading ? 'Zipping…' : '⬇ Download All'}
               </button>
 
-              {/* Chat button — shared albums only */}
               {isShared && (
                 <button
+                  className={`btn ${showChat ? 'btn-primary' : 'btn-ghost'}`}
                   onClick={handleOpenChat}
-                  style={{ padding: '0.75rem 1.25rem', backgroundColor: showChat ? '#eff6ff' : 'white', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
                 >
                   💬 Chat {comments.length > 0 && `(${comments.length})`}
                 </button>
               )}
 
-              {/* Select / remove (owner only) */}
               {isOwner && albumPhotos.length > 0 && (
                 <button
+                  className={`btn ${selectMode ? 'btn-ghost' : 'btn-ghost'}`}
                   onClick={() => { setSelectMode(!selectMode); setSelectedToRemove(new Set()); }}
-                  style={{ padding: '0.75rem 1.25rem', backgroundColor: selectMode ? '#f3f4f6' : 'white', color: '#374151', border: '1px solid #d1d5db', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
                 >
                   {selectMode ? 'Cancel' : 'Select'}
                 </button>
@@ -267,20 +370,16 @@ export default function AlbumDetail() {
 
               {isOwner && selectMode && selectedToRemove.size > 0 && (
                 <button
+                  className="btn btn-danger"
                   onClick={handleRemoveSelected}
                   disabled={saving}
-                  style={{ padding: '0.75rem 1.25rem', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
                 >
                   {saving ? 'Removing…' : `Remove (${selectedToRemove.size})`}
                 </button>
               )}
 
-              {/* Add photos (owner or member) */}
               {canAddPhotos && !selectMode && (
-                <button
-                  onClick={openAddPhotos}
-                  style={{ padding: '0.75rem 1.5rem', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-                >
+                <button className="btn btn-primary" onClick={openAddPhotos}>
                   + Add Photos
                 </button>
               )}
@@ -288,105 +387,120 @@ export default function AlbumDetail() {
           </div>
         </div>
 
-        {/* ── Members bar (shown if album is shared) ────────────────────── */}
+        {/* ── Members bar ──────────────────────────────────────────────── */}
         {isShared && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1.5rem', padding: '12px 16px', background: '#eff6ff', borderRadius: 12, border: '1px solid #bfdbfe', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1d4ed8' }}>Members:</span>
+          <div className="members-bar fu-2">
+            <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(17,17,17,0.4)', marginRight: 4 }}>
+              Members
+            </span>
             {members.map(m => (
-              <div key={m.username} style={{ display: 'flex', alignItems: 'center', gap: 6, background: m.role === 'owner' ? '#1d4ed8' : 'white', color: m.role === 'owner' ? 'white' : '#374151', borderRadius: 100, padding: '4px 12px', fontSize: '0.8rem', fontWeight: 600, border: '1px solid', borderColor: m.role === 'owner' ? '#1d4ed8' : '#d1d5db' }}>
-                <span style={{ width: 20, height: 20, borderRadius: '50%', background: m.role === 'owner' ? 'rgba(255,255,255,0.2)' : '#eff6ff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>
+              <span key={m.username} className={`member-chip ${m.role === 'owner' ? 'owner' : 'member'}`}>
+                <span style={{ width: 18, height: 18, borderRadius: '50%', background: m.role === 'owner' ? 'rgba(255,255,255,0.15)' : 'rgba(17,17,17,0.08)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800 }}>
                   {m.username[0].toUpperCase()}
                 </span>
                 @{m.username}
-                {m.role === 'owner' && <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>owner</span>}
-              </div>
+                {m.role === 'owner' && <span style={{ opacity: 0.6, fontSize: 10 }}>owner</span>}
+              </span>
             ))}
             {!isOwner && (
-              <span style={{ fontSize: '0.78rem', color: '#6b7280', marginLeft: 'auto' }}>
-                You can add photos · only the owner can delete
+              <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 11, color: 'rgba(17,17,17,0.35)', marginLeft: 'auto' }}>
+                You can add photos · only the owner can remove
               </span>
             )}
           </div>
         )}
 
         {/* ── Photo grid ───────────────────────────────────────────────── */}
-        {albumPhotos.length > 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
-            {albumPhotos.map((photo) => (
-              <div
-                key={photo.id}
-                onClick={() => {
-                  if (isOwner && selectMode) {
-                    setSelectedToRemove(prev => {
-                      const s = new Set(prev);
-                      s.has(photo.id) ? s.delete(photo.id) : s.add(photo.id);
-                      return s;
-                    });
-                  } else {
-                    setSelectedPhoto(photo);
-                  }
-                }}
-                style={{
-                  aspectRatio: '1/1', borderRadius: '10px', overflow: 'hidden', cursor: 'pointer',
-                  boxShadow: selectedToRemove.has(photo.id) ? '0 0 0 3px #dc2626' : '0 4px 10px rgba(0,0,0,0.1)',
-                  position: 'relative', transition: 'transform 0.2s',
-                }}
-                onMouseEnter={e => { if (!selectMode) e.currentTarget.style.transform = 'scale(1.05)'; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-              >
-                <img src={photo.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <div className="fu-3">
+          {albumPhotos.length > 0 ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
+              {albumPhotos.map(photo => (
+                <div
+                  key={photo.id}
+                  onClick={() => {
+                    if (selectMode && isOwner) {
+                      setSelectedToRemove(prev => {
+                        const next = new Set(prev);
+                        next.has(photo.id) ? next.delete(photo.id) : next.add(photo.id);
+                        return next;
+                      });
+                    } else {
+                      setSelectedPhoto(photo);
+                    }
+                  }}
+                  style={{
+                    aspectRatio: '1/1', borderRadius: 12, overflow: 'hidden',
+                    cursor: 'pointer',
+                    boxShadow: selectedToRemove.has(photo.id)
+                      ? '0 0 0 3px #c0392b'
+                      : '0 4px 10px rgba(0,0,0,0.08)',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    position: 'relative',
+                    opacity: selectedToRemove.has(photo.id) ? 0.85 : 1,
+                  }}
+                  onMouseEnter={e => { if (!selectMode) e.currentTarget.style.transform = 'scale(1.04)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                >
+                  <img src={photo.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
 
-                {/* Added by badge (only on shared albums, not for own photos) */}
-                {isShared && photo.added_by && photo.added_by !== album.created_by && (
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '3px 6px', background: 'linear-gradient(transparent, rgba(0,0,0,0.6))', color: 'white', fontSize: '0.7rem', textAlign: 'right' }}>
-                    +{photo.added_by}
-                  </div>
-                )}
+                  {selectMode && isOwner && (
+                    <div style={{
+                      position: 'absolute', top: '0.5rem', left: '0.5rem',
+                      width: 22, height: 22, borderRadius: '50%',
+                      backgroundColor: selectedToRemove.has(photo.id) ? '#c0392b' : 'rgba(255,255,255,0.85)',
+                      border: '2px solid white',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {selectedToRemove.has(photo.id) && <span style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>✓</span>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{
+              textAlign: 'center', padding: '80px 24px',
+              background: '#faf8f4', borderRadius: 18,
+              border: '1px solid rgba(17,17,17,0.07)',
+            }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>🖼️</div>
+              <p style={{
+                fontFamily: "'Instrument Serif', serif",
+                fontSize: 20, fontStyle: 'italic',
+                color: 'rgba(17,17,17,0.5)', marginBottom: 8,
+              }}>
+                No photos in this album
+              </p>
+              {canAddPhotos && (
+                <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={openAddPhotos}>
+                  + Add Photos
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
-                {/* Select checkbox (owner only) */}
-                {isOwner && selectMode && (
-                  <div style={{
-                    position: 'absolute', top: '0.5rem', left: '0.5rem',
-                    width: 22, height: 22, borderRadius: '50%',
-                    backgroundColor: selectedToRemove.has(photo.id) ? '#dc2626' : 'rgba(255,255,255,0.8)',
-                    border: '2px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {selectedToRemove.has(photo.id) && <span style={{ color: 'white', fontSize: 13, fontWeight: 'bold' }}>✓</span>}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '6rem 1rem', color: '#6b7280' }}>
-            <p style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>No photos in this album</p>
-            {canAddPhotos && (
-              <button
-                onClick={openAddPhotos}
-                style={{ padding: '0.75rem 1.5rem', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-              >
-                + Add Photos
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* ── Chat panel (shared albums only) ──────────────────────────── */}
+        {/* ── Chat panel ───────────────────────────────────────────────── */}
         {isShared && showChat && (
-          <div style={{ marginTop: '2rem', background: 'white', borderRadius: 12, border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', maxHeight: 480 }}>
-            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="chat-panel">
+            <div className="chat-header">
               <div>
-                <span style={{ fontWeight: 700, color: '#111827' }}>💬 Album Chat</span>
-                <span style={{ fontSize: '0.8rem', color: '#6b7280', marginLeft: 8 }}>{comments.length}/{COMMENT_LIMIT} messages</span>
+                <span className="chat-title">💬 Album Chat</span>
+                <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 11, color: 'rgba(17,17,17,0.38)', marginLeft: 10 }}>
+                  {comments.length}/{COMMENT_LIMIT} messages
+                </span>
               </div>
-              <button onClick={() => setShowChat(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: '1.2rem' }}>×</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowChat(false)}>✕</button>
             </div>
 
-            {/* Messages */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {loadingComments && <p style={{ color: '#9ca3af', fontSize: '0.85rem', textAlign: 'center' }}>Loading…</p>}
+            <div className="chat-messages">
+              {loadingComments && (
+                <p style={{ fontFamily: "'Syne', sans-serif", fontSize: 12, color: 'rgba(17,17,17,0.35)', textAlign: 'center' }}>Loading…</p>
+              )}
               {!loadingComments && comments.length === 0 && (
-                <p style={{ color: '#9ca3af', fontSize: '0.85rem', textAlign: 'center', padding: '1rem 0' }}>No messages yet. Say something!</p>
+                <p style={{ fontFamily: "'Syne', sans-serif", fontSize: 12, color: 'rgba(17,17,17,0.35)', textAlign: 'center', padding: '16px 0' }}>
+                  No messages yet — say something!
+                </p>
               )}
               {comments.map(c => {
                 const isMine = c.username === session?.user?.username;
@@ -394,17 +508,35 @@ export default function AlbumDetail() {
                 return (
                   <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
                     {!isMine && (
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', marginBottom: 2 }}>@{c.username}</span>
+                      <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 11, fontWeight: 700, color: 'rgba(17,17,17,0.45)', marginBottom: 3 }}>
+                        @{c.username}
+                      </span>
                     )}
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, flexDirection: isMine ? 'row-reverse' : 'row' }}>
-                      <div style={{ maxWidth: '75%', background: isMine ? '#2563eb' : '#f3f4f6', color: isMine ? 'white' : '#111827', borderRadius: isMine ? '16px 16px 4px 16px' : '16px 16px 16px 4px', padding: '8px 12px', fontSize: '0.88rem', lineHeight: 1.5, wordBreak: 'break-word' }}>
-                        {c.message}
-                      </div>
+                    <div style={{
+                      maxWidth: '75%', padding: '9px 14px',
+                      borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                      background: isMine ? '#111' : '#faf8f4',
+                      color: isMine ? '#f2efe9' : '#111',
+                      border: isMine ? 'none' : '1px solid rgba(17,17,17,0.08)',
+                      fontFamily: "'Syne', sans-serif", fontSize: 13,
+                      position: 'relative',
+                    }}>
+                      {c.message}
                       {canDelete && (
-                        <button onClick={() => handleDeleteComment(c.id)} style={{ background: 'none', border: 'none', color: '#d1d5db', cursor: 'pointer', fontSize: '0.75rem', padding: '0 2px', flexShrink: 0 }} title="Delete">✕</button>
+                        <button
+                          onClick={() => handleDeleteComment(c.id)}
+                          style={{
+                            position: 'absolute', top: -6, right: -6,
+                            width: 18, height: 18, borderRadius: '50%',
+                            background: 'rgba(220,38,38,0.12)', border: 'none',
+                            color: '#c0392b', fontSize: 10, cursor: 'pointer',
+                            display: 'none', alignItems: 'center', justifyContent: 'center',
+                          }}
+                          className="delete-comment-btn"
+                        >×</button>
                       )}
                     </div>
-                    <span style={{ fontSize: '0.68rem', color: '#9ca3af', marginTop: 2 }}>
+                    <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 10, color: 'rgba(17,17,17,0.3)', marginTop: 3 }}>
                       {new Date(c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
@@ -412,104 +544,137 @@ export default function AlbumDetail() {
               })}
             </div>
 
-            {/* Input */}
-            <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid #e5e7eb' }}>
-              {comments.length >= COMMENT_LIMIT ? (
-                <p style={{ fontSize: '0.82rem', color: '#9ca3af', textAlign: 'center', margin: 0 }}>Thread is full ({COMMENT_LIMIT} message limit reached)</p>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                      value={commentInput}
-                      onChange={e => setCommentInput(e.target.value.slice(0, COMMENT_MAX_LEN))}
-                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment(); } }}
-                      placeholder="Type a message…"
-                      style={{ flex: 1, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: '0.88rem', outline: 'none' }}
-                    />
-                    <button
-                      onClick={handlePostComment}
-                      disabled={postingComment || !commentInput.trim()}
-                      style={{ padding: '8px 16px', background: postingComment || !commentInput.trim() ? '#9ca3af' : '#2563eb', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}
-                    >
-                      {postingComment ? '…' : 'Send'}
-                    </button>
-                  </div>
-                  <div style={{ textAlign: 'right', fontSize: '0.72rem', color: commentInput.length > COMMENT_MAX_LEN - 50 ? '#ef4444' : '#9ca3af', marginTop: 4 }}>
-                    {commentInput.length}/{COMMENT_MAX_LEN}
-                  </div>
-                </>
-              )}
-            </div>
+            {comments.length < COMMENT_LIMIT && (
+              <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(17,17,17,0.07)' }}>
+                <div className="chat-input-row" style={{ padding: 0 }}>
+                  <textarea
+                    className="chat-input"
+                    value={commentInput}
+                    onChange={e => setCommentInput(e.target.value.slice(0, COMMENT_MAX_LEN))}
+                    placeholder="Say something…"
+                    rows={1}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment(); } }}
+                  />
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={handlePostComment}
+                    disabled={postingComment || !commentInput.trim()}
+                  >
+                    {postingComment ? '…' : 'Send'}
+                  </button>
+                </div>
+                <div style={{ textAlign: 'right', fontFamily: "'Syne', sans-serif", fontSize: 11, marginTop: 4, color: commentInput.length > COMMENT_MAX_LEN - 50 ? '#c0392b' : 'rgba(17,17,17,0.3)' }}>
+                  {commentInput.length}/{COMMENT_MAX_LEN}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
 
       {/* ── Lightbox ─────────────────────────────────────────────────────── */}
       {selectedPhoto && (
-        <div onClick={() => setSelectedPhoto(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', maxWidth: '95vw', maxHeight: '90vh', backgroundColor: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 25px 50px rgba(0,0,0,0.4)' }}>
+        <div
+          onClick={() => setSelectedPhoto(null)}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(10,8,6,0.9)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'relative', maxWidth: '95vw', maxHeight: '90vh',
+              backgroundColor: '#faf8f4', borderRadius: 16, overflow: 'hidden',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.4)',
+              animation: 'scaleIn 0.25s cubic-bezier(0.22,1,0.36,1) both',
+            }}
+          >
             <img src={selectedPhoto.url} alt="" style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain' }} />
             {selectedPhoto.added_by && isShared && (
-              <div style={{ padding: '8px 16px', fontSize: '0.82rem', color: '#6b7280', borderTop: '1px solid #e5e7eb' }}>
+              <div style={{ padding: '8px 16px', fontFamily: "'Syne', sans-serif", fontSize: 12, color: 'rgba(17,17,17,0.45)', borderTop: '1px solid rgba(17,17,17,0.07)' }}>
                 Added by @{selectedPhoto.added_by}
               </div>
             )}
-            <button onClick={() => setSelectedPhoto(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', width: 44, height: 44, borderRadius: '50%', fontSize: '1.6rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            <button
+              onClick={() => setSelectedPhoto(null)}
+              style={{ position: 'absolute', top: 12, right: 12, width: 34, height: 34, borderRadius: '50%', backgroundColor: 'rgba(10,8,6,0.55)', color: '#f2efe9', border: 'none', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >×</button>
           </div>
         </div>
       )}
 
       {/* ── Add Photos Modal ──────────────────────────────────────────────── */}
       {showAddPhotos && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '12px', width: '100%', maxWidth: '760px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px rgba(0,0,0,0.3)' }}>
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <div className="modal-header">
               <div>
-                <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '700' }}>Add Photos</h2>
-                {!isOwner && <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#6b7280' }}>You can add photos but only the album owner can remove them</p>}
+                <h2 className="modal-title">Add Photos</h2>
+                {!isOwner && (
+                  <p style={{ fontFamily: "'Syne', sans-serif", fontSize: 12, color: 'rgba(17,17,17,0.45)', margin: '4px 0 0' }}>
+                    You can add photos — only the album owner can remove them
+                  </p>
+                )}
               </div>
-              <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>{selectedToAdd.size} selected</span>
+              <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 12, fontWeight: 700, color: 'rgba(17,17,17,0.45)', letterSpacing: '0.05em' }}>
+                {selectedToAdd.size} selected
+              </span>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               {allPhotos.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.75rem' }}>
-                  {allPhotos.map((photo) => (
-                    <div
-                      key={photo.id}
-                      onClick={() => {
-                        // Non-owners can only ADD, not remove existing photos
-                        if (!isOwner && albumPhotos.some(p => p.id === photo.id)) return;
-                        setSelectedToAdd(prev => {
-                          const s = new Set(prev);
-                          s.has(photo.id) ? s.delete(photo.id) : s.add(photo.id);
-                          return s;
-                        });
-                      }}
-                      style={{
-                        aspectRatio: '1/1', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', position: 'relative',
-                        boxShadow: selectedToAdd.has(photo.id) ? '0 0 0 3px #2563eb' : '0 2px 6px rgba(0,0,0,0.1)',
-                        opacity: (!isOwner && albumPhotos.some(p => p.id === photo.id)) ? 0.4 : selectedToAdd.has(photo.id) ? 0.85 : 1,
-                      }}
-                    >
-                      <img src={photo.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      <div style={{ position: 'absolute', top: '0.4rem', left: '0.4rem', width: 20, height: 20, borderRadius: '50%', backgroundColor: selectedToAdd.has(photo.id) ? '#2563eb' : 'rgba(255,255,255,0.8)', border: '2px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {selectedToAdd.has(photo.id) && <span style={{ color: 'white', fontSize: '11px', fontWeight: 'bold' }}>✓</span>}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
+                  {allPhotos.map(photo => {
+                    const inAlbum = albumPhotos.some(p => p.id === photo.id);
+                    const selected = selectedToAdd.has(photo.id);
+                    return (
+                      <div
+                        key={photo.id}
+                        onClick={() => {
+                          if (inAlbum) return;
+                          setSelectedToAdd(prev => {
+                            const next = new Set(prev);
+                            next.has(photo.id) ? next.delete(photo.id) : next.add(photo.id);
+                            return next;
+                          });
+                        }}
+                        style={{
+                          aspectRatio: '1', borderRadius: 10, overflow: 'hidden',
+                          cursor: inAlbum ? 'default' : 'pointer',
+                          boxShadow: selected ? '0 0 0 3px #111' : 'none',
+                          opacity: inAlbum ? 0.4 : 1,
+                          position: 'relative',
+                          transition: 'box-shadow 0.15s',
+                        }}
+                      >
+                        <img src={photo.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        {selected && !inAlbum && (
+                          <div style={{ position: 'absolute', inset: 0, background: 'rgba(17,17,17,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ color: 'white', fontSize: 20, fontWeight: 800 }}>✓</span>
+                          </div>
+                        )}
+                        {inAlbum && (
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '4px 6px', background: 'rgba(17,17,17,0.55)', fontFamily: "'Syne', sans-serif", fontSize: 10, color: 'white', fontWeight: 700, textAlign: 'center' }}>
+                            In album
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
-                <p style={{ textAlign: 'center', color: '#6b7280', padding: '3rem' }}>No photos in your gallery yet.</p>
+                <p style={{ fontFamily: "'Syne', sans-serif", fontSize: 13, color: 'rgba(17,17,17,0.38)', textAlign: 'center', padding: '40px 0' }}>
+                  No photos in your gallery yet
+                </p>
               )}
             </div>
 
-            <div style={{ padding: '1.25rem 1.5rem', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-              <button onClick={() => { setShowAddPhotos(false); setSelectedToAdd(new Set()); }} style={{ padding: '0.75rem 1.25rem', backgroundColor: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>
-                Cancel
-              </button>
-              <button onClick={handleAddPhotos} disabled={saving} style={{ padding: '0.75rem 1.5rem', backgroundColor: saving ? '#9ca3af' : '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: saving ? 'not-allowed' : 'pointer' }}>
-                {saving ? 'Saving…' : 'Save'}
+            <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(17,17,17,0.07)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setShowAddPhotos(false)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleAddPhotos}
+                disabled={saving || selectedToAdd.size === 0}
+              >
+                {saving ? 'Saving…' : 'Add to Album'}
               </button>
             </div>
           </div>

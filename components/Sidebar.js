@@ -11,7 +11,7 @@ const navItems = [
   { href: '/groups',  label: 'Groups',         icon: GroupsIcon  },
   { href: '/shared',  label: 'Shared With Me', icon: SharedIcon  },
   { href: '/people',  label: 'People',         icon: PeopleIcon  },
-  { href: '/search',  label: 'Search & Filter',icon: SearchIcon  },
+  // { href: '/search',  label: 'Search & Filter',icon: SearchIcon  },
   { href: '/agent', label: 'AI Assistant', icon: AgentIcon },
 ];
 
