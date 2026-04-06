@@ -5,6 +5,8 @@ import * as faceapi from 'face-api.js';
 import Header from '../../components/Header';
 import Sidebar from '../../components/Sidebar';
 import BottomNav from '../../components/BottomNav';
+import PhotoPanel from '@/components/PhotoPanel';
+
 
 const EMOTION_EMOJI = {
   happy: '😊', excited: '🎉', surprised: '😮',
@@ -24,8 +26,9 @@ export default function Gallery() {
   const [sharing, setSharing]         = useState(false);
   const [shareMsg, setShareMsg]       = useState('');
   const [modelsLoaded, setModels]     = useState(false);
+  const [filterMode, setFilterMode]           = useState(null);
 
-  // Re-analysis state
+  // Re-analsis state
   const [reanalyzing, setReanalyzing]             = useState(false);
   const [reanalyzeMsg, setReanalyzeMsg]           = useState('');
   const [reanalyzeProgress, setReanalyzeProgress] = useState(null);
@@ -34,6 +37,10 @@ export default function Gallery() {
   const [editingLocation, setEditingLocation] = useState(null);
   const [locationInput, setLocationInput]     = useState('');
   const [savingLocation, setSavingLocation]   = useState(false);
+
+const displayPhotos = filterMode === 'top'
+  ? photos.filter(p => (p.content_score || 0) >= 80)
+  : photos;
 
   useEffect(() => { fetchPhotos(); }, []);
 
@@ -283,6 +290,24 @@ export default function Gallery() {
               </button>
             )}
 
+            {/* ── Top picks filter ─────────────────────────────────────────── */}
+{photos.length > 0 && !selectMode && (
+  <button
+    onClick={() => setFilterMode(filterMode === 'top' ? null : 'top')}
+    style={{
+      padding: '0.8rem 1.25rem',
+      backgroundColor: filterMode === 'top' ? '#111' : 'white',
+      color: filterMode === 'top' ? '#f2efe9' : '#374151',
+      border: '1px solid #d1d5db',
+      borderRadius: '8px', fontWeight: 600, cursor: 'pointer',
+    }}
+  >
+    {filterMode === 'top' ? '✦ Showing top picks' : '✦ Top picks'}
+  </button>
+)}
+
+
+
             {photos.length > 0 && (
               <button
                 className={`btn ${selectMode ? 'btn-primary' : 'btn-ghost'}`}
@@ -313,9 +338,11 @@ export default function Gallery() {
 
         {/* ── Photo grid ────────────────────────────────────────────────── */}
         <div className="fu-2">
-          {photos.length > 0 ? (
+          {/* Top picks filter derived from photos array */}
+{(() => { var displayPhotos = filterMode === 'top' ? photos.filter(p => (p.content_score || 0) >= 80) : photos; return null; })()}
+          {displayPhotos.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
-              {photos.map(photo => (
+              {displayPhotos.map(photo => (
                 <div
                   key={photo.id}
                   onClick={() => {
@@ -359,6 +386,25 @@ export default function Gallery() {
                       {EMOTION_EMOJI[photo.dominant_emotion] ?? ''} {photo.dominant_emotion}
                     </div>
                   )}
+                  {!selectMode && photo.dominant_emotion && photo.dominant_emotion !== 'neutral' && (
+  <div style={{ position: 'absolute', bottom: '0.4rem', right: '0.4rem', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', borderRadius: '100px', padding: '2px 7px', fontSize: 11, color: 'white', fontWeight: 600 }}>
+    {EMOTION_EMOJI[photo.dominant_emotion] ?? ''} {photo.dominant_emotion}
+  </div>
+)}
+
+{/* ← ADD THIS RIGHT HERE, after the emotion badge */}
+{!selectMode && (photo.content_score || 0) >= 80 && (
+  <div style={{
+    position: 'absolute', top: '0.4rem', left: '0.4rem',
+    background: 'rgba(22,163,74,0.9)',
+    backdropFilter: 'blur(4px)',
+    borderRadius: 100, padding: '2px 8px',
+    fontSize: 10, color: 'white', fontWeight: 700,
+    letterSpacing: '0.04em',
+  }}>
+    ✦ Top pick
+  </div>
+)}
 
                   {!selectMode && photo.place_name && (
                     <div style={{
@@ -522,6 +568,13 @@ export default function Gallery() {
             </div>
 
             {/* Close */}
+            {selectedPhoto && (
+  <PhotoPanel
+    photo={{ ...selectedPhoto, people: selectedPhoto.people || [] }}
+    onClose={() => { setSelected(null); }}
+    onLocationSave={fetchPhotos}
+  />
+)}
             <button
               onClick={closeLightbox}
               style={{

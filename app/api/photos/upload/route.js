@@ -187,6 +187,19 @@ export async function POST(req) {
       );
 
       const photoId = inserted.rows[0].id;
+      
+      // Score immediately — no extra API call, pure computation
+const { scorePhoto } = await import("@/lib/scoring");
+const score = scorePhoto({
+  dominant_emotion: emotion,
+  face_count: faceCount,
+  width: imageMeta.width,
+  height: imageMeta.height,
+  place_name: placeName,
+  ai_description: description,
+  people: peopleNames,
+});
+await pool.query("UPDATE photos SET content_score = $1 WHERE id = $2", [score, photoId]);
 
       // ── Link to matched people ────────────────────────────────────────────
       for (const person of matchedPeople) {

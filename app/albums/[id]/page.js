@@ -25,6 +25,7 @@ export default function AlbumDetail() {
   const [loading, setLoading]           = useState(true);
   const [saving, setSaving]             = useState(false);
   const [downloading, setDownloading]   = useState(false);
+  const [story, setStory] = useState(null);
 
   // Comments / chat
   const [showChat, setShowChat]             = useState(false);
@@ -36,6 +37,14 @@ export default function AlbumDetail() {
   const COMMENT_LIMIT   = 200;
 
   useEffect(() => { fetchAlbum(); }, [id]);
+  useEffect(() => {
+  if (album && members.length > 0) { // only for shared albums
+    fetch(`/api/albums/${id}/story`)
+      .then(r => r.json())
+      .then(data => setStory(data))
+      .catch(() => {});
+  }
+}, [album, members]);
 
   const fetchAlbum = async () => {
     setLoading(true);
@@ -410,6 +419,37 @@ export default function AlbumDetail() {
           </div>
         )}
 
+{story?.summary && (
+  <div style={{
+    background: 'linear-gradient(135deg, #faf8f4 0%, #f2efe9 100%)',
+    border: '1px solid rgba(17,17,17,0.08)',
+    borderRadius: 16, padding: '20px 24px', marginBottom: 24,
+  }}>
+    <p style={{ fontFamily: "'Syne', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(17,17,17,0.35)', marginBottom: 10 }}>
+      ✦ The story
+    </p>
+    <p style={{ fontFamily: "'Instrument Serif', serif", fontSize: 18, fontStyle: 'italic', color: '#111', lineHeight: 1.5, margin: '0 0 16px' }}>
+      {story.summary}
+    </p>
+    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      {[
+        { label: 'photos',       value: story.photo_count },
+        { label: 'people',       value: story.contributor_count },
+        { label: 'days',         value: story.days },
+        { label: 'locations',    value: story.location_count },
+      ].map(s => (
+        <div key={s.label} style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 800, color: '#111', lineHeight: 1 }}>
+            {s.value}
+          </div>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(17,17,17,0.35)', marginTop: 2 }}>
+            {s.label}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
         {/* ── Photo grid ───────────────────────────────────────────────── */}
         <div className="fu-3">
           {albumPhotos.length > 0 ? (
