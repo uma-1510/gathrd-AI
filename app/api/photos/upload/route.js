@@ -1,7 +1,7 @@
 // app/api/photos/upload/route.js
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import getSupabaseAdmin from "@/lib/supabaseAdmin";
+import supabaseAdmin from "@/lib/supabaseAdmin";
 import pool from "@/lib/db";
 import { initDb } from "@/lib/initDb";
 import sharp from "sharp";
@@ -10,8 +10,17 @@ import { captionImage, embedText, toSqlVector } from "@/lib/hf";
 import { buildDescription } from "@/lib/description";
 import { matchFaceToPeople } from "@/lib/faceMatcher";
 
+const VIDEO_MIME_TYPES = new Set([
+  "video/mp4", "video/quicktime", "video/x-msvideo",
+  "video/webm", "video/x-matroska", "video/mpeg",
+]);
+const VIDEO_EXTENSIONS = /\.(mp4|mov|avi|webm|mkv|mpeg|mpg)$/i;
+
+function isVideo(file) {
+  return VIDEO_MIME_TYPES.has(file.type) || VIDEO_EXTENSIONS.test(file.name);
+}
+
 // ── Reverse geocode coordinates → human-readable place name ──────────────────
-// Uses OpenStreetMap Nominatim — free, no API key required.
 async function reverseGeocode(lat, lng) {
   try {
     const res = await fetch(
@@ -29,6 +38,16 @@ async function reverseGeocode(lat, lng) {
   } catch {
     return null;
   }
+}
+
+// ── Generate a plain-text description for a video (no vision API needed) ─────
+function buildVideoDescription(filename) {
+  const cleanName = filename
+    .replace(/\.[^.]+$/, "")         // strip extension
+    .replace(/[_-]/g, " ")           // underscores/dashes → spaces
+    .replace(/\d{13}[-_]?/g, "")     // strip timestamp prefixes
+    .trim();
+  return `A video clip${cleanName ? `: ${cleanName}` : ""}.`;
 }
 
 export async function POST(req) {
@@ -67,11 +86,59 @@ export async function POST(req) {
       const filename = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`;
       const storagePath = `${session.user.username}/${filename}`;
 
-      // ── Sharp metadata ────────────────────────────────────────────────────
+      // ── VIDEO PATH ────────────────────────────────────────────────────────
+      if (isVideo(file)) {
+        const mimeType = file.type || "video/mp4";
+
+        const { error: uploadError } = await supabaseAdmin.storage
+          .from("photos")
+          .upload(storagePath, rawBuffer, { contentType: mimeType, upsert: false });
+
+        if (uploadError) {
+          console.error("Video upload error:", uploadError);
+          continue;
+        }
+
+        const { data: urlData } = supabaseAdmin.storage.from("photos").getPublicUrl(storagePath);
+        const url = urlData.publicUrl;
+
+        // Simple text description for video — no vision API
+        const description = buildVideoDescription(file.name);
+
+        let embeddingValue = null;
+        try {
+          const emb = await embedText(description);
+          embeddingValue = toSqlVector(emb);
+        } catch {}
+
+        const inserted = await pool.query(
+          `INSERT INTO photos (
+            user_id, filename, url, uploaded_by, storage_path,
+            mime_type, file_size,
+            ai_description, embedding, needs_recaption
+          ) VALUES (
+            $1,$2,$3,$4,$5,
+            $6,$7,
+            $8,$9::vector,$10
+          ) RETURNING id`,
+          [
+            userId, filename, url, session.user.username, storagePath,
+            mimeType, file.size || null,
+            description, embeddingValue, false,
+          ]
+        );
+
+        uploadedPhotos.push({ filename, url, description, isVideo: true });
+        continue;
+      }
+
+      // ── IMAGE PATH ────────────────────────────────────────────────────────
+
+      // Sharp metadata
       let imageMeta = {};
       try { imageMeta = await sharp(rawBuffer).metadata(); } catch {}
 
-      // ── Compress for upload ───────────────────────────────────────────────
+      // Compress for upload
       let uploadBuffer = rawBuffer;
       try {
         uploadBuffer = await sharp(rawBuffer)
@@ -81,45 +148,51 @@ export async function POST(req) {
           .toBuffer();
       } catch {}
 
-      // ── EXIF ─────────────────────────────────────────────────────────────
+      // EXIF
       let exif = {};
       try { exif = await exifr.parse(rawBuffer, { gps: true }) ?? {}; } catch {}
 
-      // ── Reverse geocode GPS → place name ──────────────────────────────────
+      // Reverse geocode GPS → place name
       let placeName = null;
       if (exif?.latitude && exif?.longitude) {
         placeName = await reverseGeocode(exif.latitude, exif.longitude);
       }
 
-      // ── Upload to Supabase ────────────────────────────────────────────────
-      const { error: uploadError } = await getSupabaseAdmin.storage
-        .from("photos")
-        .upload(storagePath, uploadBuffer, { contentType: "image/jpeg", upsert: false });
+      // Upload to Supabase
+    const { default: supabaseAdmin } = await import("@/lib/supabaseAdmin");
+if (!supabaseAdmin?.storage) {
+  console.error("supabaseAdmin.storage unavailable — check SUPABASE_SERVICE_ROLE_KEY");
+  continue;
+}
 
-      if (uploadError) { console.error("Upload error:", uploadError); continue; }
+const { error: uploadError } = await supabaseAdmin.storage
+  .from("photos")
+  .upload(storagePath, uploadBuffer, { contentType: "image/jpeg", upsert: false });
 
-      const { data: urlData } = getSupabaseAdmin.storage.from("photos").getPublicUrl(storagePath);
+if (uploadError) { console.error("Upload error:", uploadError); continue; }
+
+const { data: urlData } = supabaseAdmin.storage.from("photos").getPublicUrl(storagePath);
       const url = urlData.publicUrl;
 
-      // ── Face data from client ─────────────────────────────────────────────
+      // Face data from client
       const faceData = faceResultsMap[file.name] || {};
       const faceCount = faceData.faceCount ?? 0;
       const emotion = faceData.dominantEmotion ?? null;
       const descriptor = faceData.descriptor ?? null;
 
-      // ── Match against known people ────────────────────────────────────────
+      // Match against known people
       const matchedPeople = await matchFaceToPeople(descriptor, session.user.username);
       const peopleNames = matchedPeople.map(p => p.name);
 
-      // ── BLIP visual caption ───────────────────────────────────────────────
+      // AI caption via GPT-4o-mini vision
       let caption = null;
       try {
         caption = await captionImage(uploadBuffer);
       } catch (err) {
-        console.error("BLIP caption error:", err.message);
+        console.error("Caption error:", err.message);
       }
 
-      // ── Build description (from lib/description.js) ───────────────────────
+      // Build description
       const { description, needsRecaption } = buildDescription({
         caption,
         filename: file.name,
@@ -130,7 +203,7 @@ export async function POST(req) {
         placeName,
       });
 
-      // ── Embed description ─────────────────────────────────────────────────
+      // Embed description
       let embeddingValue = null;
       try {
         const emb = await embedText(description);
@@ -139,28 +212,7 @@ export async function POST(req) {
         console.error("Embedding error:", err.message);
       }
 
-      // ── DB insert ─────────────────────────────────────────────────────────
-      // Columns:  $1  user_id
-      //           $2  filename
-      //           $3  url
-      //           $4  uploaded_by
-      //           $5  storage_path
-      //           $6  mime_type
-      //           $7  file_size
-      //           $8  width
-      //           $9  height
-      //           $10 format
-      //           $11 date_taken
-      //           $12 camera_make
-      //           $13 camera_model
-      //           $14 latitude
-      //           $15 longitude
-      //           $16 place_name          ← new
-      //           $17 face_count
-      //           $18 dominant_emotion
-      //           $19 ai_description
-      //           $20 embedding
-      //           $21 needs_recaption
+      // DB insert
       const inserted = await pool.query(
         `INSERT INTO photos (
           user_id, filename, url, uploaded_by, storage_path,
@@ -187,21 +239,8 @@ export async function POST(req) {
       );
 
       const photoId = inserted.rows[0].id;
-      
-      // Score immediately — no extra API call, pure computation
-const { scorePhoto } = await import("@/lib/scoring");
-const score = scorePhoto({
-  dominant_emotion: emotion,
-  face_count: faceCount,
-  width: imageMeta.width,
-  height: imageMeta.height,
-  place_name: placeName,
-  ai_description: description,
-  people: peopleNames,
-});
-await pool.query("UPDATE photos SET content_score = $1 WHERE id = $2", [score, photoId]);
 
-      // ── Link to matched people ────────────────────────────────────────────
+      // Link to matched people
       for (const person of matchedPeople) {
         await pool.query(
           "INSERT INTO photo_people (photo_id, person_id, confidence) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
@@ -209,35 +248,7 @@ await pool.query("UPDATE photos SET content_score = $1 WHERE id = $2", [score, p
         );
       }
 
-      if (!caption && needsRecaption && photoId) {
-  // Fire-and-forget — don't block the upload response
-  (async () => {
-    try {
-      await new Promise(r => setTimeout(r, 3000)); // wait 3s for OpenAI to recover
-      const retryCaption = await captionImage(uploadBuffer);
-      if (retryCaption) {
-        const { description: retryDesc } = buildDescription({
-          caption: retryCaption,
-          filename: file.name,
-          exif,
-          faceCount,
-          emotion,
-          peopleNames,
-          placeName,
-        });
-        const retryEmb = await embedText(retryDesc);
-        await pool.query(
-          `UPDATE photos SET ai_description = $1, embedding = $2::vector, needs_recaption = false WHERE id = $3`,
-          [retryDesc, toSqlVector(retryEmb), photoId]
-        );
-      }
-    } catch {
-      // Silent — reindex route handles persistent failures
-    }
-  })();
-}
-
-uploadedPhotos.push({ filename, url, caption, description, peopleFound: peopleNames });
+      uploadedPhotos.push({ filename, url, caption, description, peopleFound: peopleNames, isVideo: false });
     }
 
     return NextResponse.json({ photos: uploadedPhotos }, { status: 201 });

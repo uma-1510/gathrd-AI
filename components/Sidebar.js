@@ -12,7 +12,7 @@ const navItems = [
   { href: '/shared',  label: 'Shared With Me', icon: SharedIcon  },
   { href: '/people',  label: 'People',         icon: PeopleIcon  },
   // { href: '/search',  label: 'Search & Filter',icon: SearchIcon  },
-  { href: '/agent', label: 'AI Assistant', icon: AgentIcon },
+  { href: '/assistant', label: 'AI Assistant', icon: AgentIcon },
 ];
 
 export default function Sidebar() {
