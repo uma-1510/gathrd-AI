@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import getSupabaseAdmin from "@/lib/supabaseAdmin";
 import pool from "@/lib/db";
 
 export async function DELETE(req) {
@@ -16,10 +15,10 @@ export async function DELETE(req) {
       return NextResponse.json({ error: "No photo IDs provided" }, { status: 400 });
     }
 
-    // Fetch photos from DB to get storage paths
+    // Fetch photos from DB to get storage paths (ownership check baked in)
     const placeholders = photoIds.map((_, i) => `$${i + 1}`).join(', ');
     const result = await pool.query(
-      `SELECT * FROM photos WHERE id IN (${placeholders}) AND uploaded_by = $${photoIds.length + 1}`,
+      `SELECT id, storage_path FROM photos WHERE id IN (${placeholders}) AND uploaded_by = $${photoIds.length + 1}`,
       [...photoIds, session.user.username]
     );
 
@@ -29,22 +28,30 @@ export async function DELETE(req) {
       return NextResponse.json({ error: "No photos found" }, { status: 404 });
     }
 
-    // Delete from Supabase Storage
+    // ── Try to delete from Supabase Storage (best-effort, never blocks DB delete) ──
     const storagePaths = photos
       .filter(p => p.storage_path)
       .map(p => p.storage_path);
 
     if (storagePaths.length > 0) {
-      const { error: storageError } = await getSupabaseAdmin.storage
-        .from("photos")
-        .remove(storagePaths);
-
-      if (storageError) {
-        console.error("Storage delete error:", storageError);
+      try {
+        const { default: supabaseAdmin } = await import("@/lib/supabaseAdmin");
+        if (supabaseAdmin?.storage) {
+          const { error: storageError } = await supabaseAdmin.storage
+            .from("photos")
+            .remove(storagePaths);
+          if (storageError) {
+            console.error("Storage delete error (non-fatal):", storageError);
+          }
+        } else {
+          console.warn("supabaseAdmin.storage unavailable — skipping storage delete");
+        }
+      } catch (storageErr) {
+        console.error("Storage delete threw (non-fatal):", storageErr.message);
       }
     }
 
-    // Delete from DB
+    // ── Always delete from DB ─────────────────────────────────────────────────
     await pool.query(
       `DELETE FROM photos WHERE id IN (${placeholders}) AND uploaded_by = $${photoIds.length + 1}`,
       [...photoIds, session.user.username]

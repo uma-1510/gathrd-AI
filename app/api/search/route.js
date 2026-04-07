@@ -279,7 +279,7 @@ export async function GET(req) {
           photos = result.rows; // trust the JOIN, no similarity cutoff
         } else {
           photos = result.rows.filter(r =>
-  intent.peopleFilter.length > 0 ? true : r.similarity >= 0.25
+  intent.peopleFilter.length > 0 ? r.similarity >= 0.30 : r.similarity >= 0.50
 );
         }
       } catch (err) {
