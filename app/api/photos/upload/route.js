@@ -187,6 +187,19 @@ export async function POST(req) {
       );
 
       const photoId = inserted.rows[0].id;
+      
+      // Score immediately — no extra API call, pure computation
+const { scorePhoto } = await import("@/lib/scoring");
+const score = scorePhoto({
+  dominant_emotion: emotion,
+  face_count: faceCount,
+  width: imageMeta.width,
+  height: imageMeta.height,
+  place_name: placeName,
+  ai_description: description,
+  people: peopleNames,
+});
+await pool.query("UPDATE photos SET content_score = $1 WHERE id = $2", [score, photoId]);
 
       // ── Link to matched people ────────────────────────────────────────────
       for (const person of matchedPeople) {
@@ -196,7 +209,35 @@ export async function POST(req) {
         );
       }
 
-      uploadedPhotos.push({ filename, url, caption, description, peopleFound: peopleNames });
+      if (!caption && needsRecaption && photoId) {
+  // Fire-and-forget — don't block the upload response
+  (async () => {
+    try {
+      await new Promise(r => setTimeout(r, 3000)); // wait 3s for OpenAI to recover
+      const retryCaption = await captionImage(uploadBuffer);
+      if (retryCaption) {
+        const { description: retryDesc } = buildDescription({
+          caption: retryCaption,
+          filename: file.name,
+          exif,
+          faceCount,
+          emotion,
+          peopleNames,
+          placeName,
+        });
+        const retryEmb = await embedText(retryDesc);
+        await pool.query(
+          `UPDATE photos SET ai_description = $1, embedding = $2::vector, needs_recaption = false WHERE id = $3`,
+          [retryDesc, toSqlVector(retryEmb), photoId]
+        );
+      }
+    } catch {
+      // Silent — reindex route handles persistent failures
+    }
+  })();
+}
+
+uploadedPhotos.push({ filename, url, caption, description, peopleFound: peopleNames });
     }
 
     return NextResponse.json({ photos: uploadedPhotos }, { status: 201 });

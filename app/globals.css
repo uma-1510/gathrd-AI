@@ -1,41 +1,48 @@
 /* app/globals.css */
 
-/* Hide desktop sidebar by default */
-.desktop-sidebar {
-  display: none;
-}
+/* ── Sidebar visibility ──────────────────────────────────────────────────── */
+/* Sidebar component itself handles positioning — this just controls the
+   main content offset so it doesn't sit under the sidebar on desktop */
 
-/* Show desktop sidebar only on desktop (≥ 768px) */
-@media (min-width: 768px) {
-  .desktop-sidebar {
-    display: block;
-    position: fixed;
-    top: 68px;
-    left: 0;
-    bottom: 0;
-    width: 240px;
-    background: white;
-    border-right: 1px solid #e2e8f0;
-    overflow-y: auto;
-    padding-top: 1rem;
-    z-index: 900;
-  }
-
-  /* Main content gets left margin on desktop */
+@media (min-width: 1024px) {
+  /* Push main content right on desktop to clear the 240px sidebar */
   main {
     margin-left: 240px !important;
   }
 }
 
-/* On mobile: no left margin for main content */
-@media (max-width: 767.98px) {
+@media (max-width: 1023px) {
+  /* On mobile/tablet: no left margin — sidebar is hidden */
   main {
     margin-left: 0 !important;
-    padding: 1.5rem 1rem 4rem !important;
   }
+}
 
-  /* Force hide desktop sidebar on mobile */
-  .desktop-sidebar {
+/* ── Sidebar hide/show ───────────────────────────────────────────────────── */
+/* The Sidebar component uses position:fixed and is always in the DOM.
+   Hide it on mobile via this rule so inline styles don't override */
+@media (max-width: 1023px) {
+  aside.sidebar {
     display: none !important;
   }
+}
+
+/* ── BottomNav ───────────────────────────────────────────────────────────── */
+/* BottomNav already has @media(min-width:1024px){display:none} built in */
+
+/* ── Global resets ───────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(17,17,17,0.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(17,17,17,0.25); }
+
+/* ── Spin animation (used by gallery re-analyse button) ─────────────────── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }

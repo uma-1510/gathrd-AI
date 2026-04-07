@@ -36,6 +36,11 @@ export default function Sidebar() {
         }
         .sidebar::-webkit-scrollbar { width: 0; }
 
+        /* Find the .sidebar rule and add this immediately after its closing brace: */
+@media (max-width: 1023px) {
+  .sidebar { display: none !important; }
+}
+
         @keyframes slideInLeft {
           from { opacity:0; transform:translateX(-12px); }
           to   { opacity:1; transform:translateX(0); }

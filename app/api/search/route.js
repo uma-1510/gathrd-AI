@@ -278,7 +278,9 @@ export async function GET(req) {
         if (hasPeopleFilter) {
           photos = result.rows; // trust the JOIN, no similarity cutoff
         } else {
-          photos = result.rows.filter(r => r.similarity >= 0.35);
+          photos = result.rows.filter(r =>
+  intent.peopleFilter.length > 0 ? true : r.similarity >= 0.25
+);
         }
       } catch (err) {
         console.error("Vector search failed:", err.message);
