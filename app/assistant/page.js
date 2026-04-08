@@ -6,14 +6,13 @@ import Sidebar from '../../components/Sidebar';
 import BottomNav from '../../components/BottomNav';
 
 const SUGGESTIONS = [
-  "What was I doing last October?",
+  "What was I doing October 2024?",
   "Show me photos with my family",
-  "Find my best photos for Instagram",
   "Who do I take the most photos with?",
-  "Create an album of my recent trip",
+  "Create an album of my recent boston trip",
   "Find duplicate photos",
-  "Write Instagram captions for my top photos",
-  "Show me photos from my birthday",
+  "Show me photos from srihitha's birthday",
+  "show me yashu's photos from worcester",
 ];
 
 // ── Photo grid rendered inside a chat bubble ──────────────────────────────────
