@@ -15,14 +15,8 @@ function getPossibleOwners(session) {
     .map((v) => String(v));
 }
 
-function rowMatchesOwner(photo, owners) {
-  const candidates = [
-    photo.user_id,
-    photo.uploaded_by,
-    photo.owner,
-    photo.username,
-    photo.email,
-  ]
+function rowMatchesOwner(video, owners) {
+  const candidates = [video.user_id]
     .filter(Boolean)
     .map((v) => String(v));
 
@@ -51,64 +45,44 @@ export async function GET() {
     const result = await pool.query(
       `
       SELECT *
-      FROM photos
+      FROM videos
       ORDER BY uploaded_at DESC
       `
     );
 
-    const ownedPhotos = result.rows.filter((photo) =>
-      rowMatchesOwner(photo, possibleOwners)
+    const ownedVideos = result.rows.filter((video) =>
+      rowMatchesOwner(video, possibleOwners)
     );
 
-    const ONE_YEAR = 60 * 60 * 24 * 365;
-
-    const refreshed = await Promise.all(
-      ownedPhotos.map(async (photo) => {
-        if (!isValidStoragePath(photo.storage_path)) {
-          return {
-            ...photo,
-            url: photo.url || null,
-            media_type: "photo",
-          };
+    const videosWithUrls = await Promise.all(
+      ownedVideos.map(async (video) => {
+        if (!isValidStoragePath(video.storage_path)) {
+          return { ...video, url: null, media_type: "video" };
         }
 
         try {
           const { data, error } = await supabaseAdmin.storage
-            .from("photos")
-            .createSignedUrl(photo.storage_path, ONE_YEAR);
+            .from("videos")
+            .createSignedUrl(video.storage_path, 60 * 60 * 24 * 30);
 
           if (error || !data?.signedUrl) {
-            return {
-              ...photo,
-              url: photo.url || null,
-              media_type: "photo",
-            };
+            return { ...video, url: null, media_type: "video" };
           }
 
-          pool.query(
-            "UPDATE photos SET url = $1 WHERE id = $2",
-            [data.signedUrl, photo.id]
-          ).catch((err) => console.error("URL refresh DB update failed:", err));
-
           return {
-            ...photo,
+            ...video,
             url: data.signedUrl,
-            media_type: "photo",
+            media_type: "video",
           };
-        } catch (err) {
-          console.error("Signed URL refresh failed:", err);
-          return {
-            ...photo,
-            url: photo.url || null,
-            media_type: "photo",
-          };
+        } catch {
+          return { ...video, url: null, media_type: "video" };
         }
       })
     );
 
-    return NextResponse.json({ photos: refreshed });
+    return NextResponse.json({ videos: videosWithUrls });
   } catch (err) {
-    console.error("Fetch photos error:", err);
+    console.error("GET VIDEOS ERROR:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Internal server error" },
       { status: 500 }
