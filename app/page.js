@@ -19,10 +19,106 @@ function moodStyle(mood) {
   return MOOD_PALETTE[mood] ?? MOOD_PALETTE.neutral;
 }
 
-// ── Tiny helper: pluralise photos ─────────────────────────────────────────────
 function photoLabel(n) {
   const count = parseInt(n, 10) || 0;
   return `${count} photo${count !== 1 ? 's' : ''}`;
+}
+
+// ── Homepage memory reel card ────────────────────────────────────────────────
+function MemoryReelCard({ reel, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        minWidth: 280,
+        borderRadius: 18,
+        overflow: 'hidden',
+        background: '#faf8f4',
+        border: '1px solid rgba(17,17,17,0.07)',
+        cursor: 'pointer',
+        transition: 'transform 0.22s cubic-bezier(0.22,1,0.36,1), box-shadow 0.22s',
+        flexShrink: 0,
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.transform = 'translateY(-6px)';
+        e.currentTarget.style.boxShadow = '0 24px 48px rgba(0,0,0,0.12)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+    >
+      <div style={{ height: 210, background: '#111', position: 'relative', overflow: 'hidden' }}>
+        <video
+          src={reel.recap_url}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          muted
+          playsInline
+          autoPlay
+          loop
+        />
+
+        <div style={{
+          position: 'absolute',
+          top: 10,
+          left: 10,
+          background: 'rgba(255,255,255,0.85)',
+          backdropFilter: 'blur(8px)',
+          borderRadius: 100,
+          padding: '3px 10px',
+          fontSize: 11,
+          fontFamily: "'Syne', sans-serif",
+          fontWeight: 600,
+          color: '#111',
+          letterSpacing: '0.02em',
+        }}>
+          ▶ Memory Reel
+        </div>
+      </div>
+
+      <div style={{ padding: '14px 16px' }}>
+        <div style={{
+          fontFamily: "'Instrument Serif', serif",
+          fontSize: 19,
+          fontStyle: 'italic',
+          color: '#111',
+          marginBottom: 4,
+          lineHeight: 1.2,
+        }}>
+          {reel.title}
+        </div>
+
+        <div style={{
+          fontFamily: "'Syne', sans-serif",
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'rgba(17,17,17,0.4)',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          marginBottom: 8,
+        }}>
+          {reel.date || 'Memory'}
+        </div>
+
+        <div style={{
+          fontFamily: "'Syne', sans-serif",
+          fontSize: 12,
+          color: 'rgba(17,17,17,0.5)',
+          marginBottom: 8,
+        }}>
+          {reel.place_name || 'Memory highlight'}
+        </div>
+
+        <div style={{
+          fontFamily: "'Syne', sans-serif",
+          fontSize: 12,
+          color: 'rgba(17,17,17,0.5)',
+        }}>
+          {photoLabel(reel.count)}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Month memory card ─────────────────────────────────────────────────────────
@@ -50,7 +146,6 @@ function MemoryCard({ memory, onClick }) {
         e.currentTarget.style.boxShadow = 'none';
       }}
     >
-      {/* Cover image */}
       <div style={{ height: 160, background: palette.bg, position: 'relative', overflow: 'hidden' }}>
         {memory.cover_url ? (
           <img
@@ -67,7 +162,6 @@ function MemoryCard({ memory, onClick }) {
             📷
           </div>
         )}
-        {/* Mood pill */}
         <div style={{
           position: 'absolute', top: 10, left: 10,
           background: 'rgba(255,255,255,0.85)',
@@ -84,7 +178,6 @@ function MemoryCard({ memory, onClick }) {
         </div>
       </div>
 
-      {/* Info */}
       <div style={{ padding: '14px 16px' }}>
         <div style={{
           fontFamily: "'Instrument Serif', serif",
@@ -115,7 +208,7 @@ function MemoryCard({ memory, onClick }) {
   );
 }
 
-// ── Album card (used for both pinned + recent) ────────────────────────────────
+// ── Album card ────────────────────────────────────────────────────────────────
 function AlbumCard({ album, onPin, router, compact = false }) {
   const [pinning, setPinning] = useState(false);
 
@@ -147,7 +240,6 @@ function AlbumCard({ album, onPin, router, compact = false }) {
         e.currentTarget.style.boxShadow = 'none';
       }}
     >
-      {/* Cover */}
       <div style={{
         height: compact ? 130 : 160,
         background: 'rgba(17,17,17,0.05)',
@@ -168,7 +260,6 @@ function AlbumCard({ album, onPin, router, compact = false }) {
           </svg>
         )}
 
-        {/* Pin button */}
         <button
           onClick={handlePin}
           disabled={pinning}
@@ -193,7 +284,6 @@ function AlbumCard({ album, onPin, router, compact = false }) {
         </button>
       </div>
 
-      {/* Info */}
       <div style={{ padding: compact ? '10px 12px' : '14px 16px' }}>
         <div style={{
           fontFamily: "'Syne', sans-serif",
@@ -221,14 +311,13 @@ function AlbumCard({ album, onPin, router, compact = false }) {
 }
 
 // ── Memory detail modal ───────────────────────────────────────────────────────
-function MemoryModal({ memory, onClose, router }) {
+function MemoryModal({ memory, onClose }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
 
   useEffect(() => {
     if (!memory?.photo_ids?.length) { setLoading(false); return; }
-    // Fetch full photo details for ids in this memory
     fetch(`/api/memories/${memory.id}/photos`)
       .then(r => r.json())
       .then(d => { if (d.photos) setPhotos(d.photos); })
@@ -262,7 +351,6 @@ function MemoryModal({ memory, onClose, router }) {
           animation: 'scaleIn 0.28s cubic-bezier(0.22,1,0.36,1) both',
         }}
       >
-        {/* Header */}
         <div style={{
           padding: '24px 28px 20px',
           borderBottom: '1px solid rgba(17,17,17,0.07)',
@@ -306,7 +394,6 @@ function MemoryModal({ memory, onClose, router }) {
           </button>
         </div>
 
-        {/* Photo grid */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
           {loading ? (
             <div style={{
@@ -356,7 +443,6 @@ function MemoryModal({ memory, onClose, router }) {
         </div>
       </div>
 
-      {/* Lightbox inside modal */}
       {selectedPhoto && (
         <div
           onClick={() => setSelectedPhoto(null)}
@@ -387,6 +473,95 @@ function MemoryModal({ memory, onClose, router }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Reel player modal ─────────────────────────────────────────────────────────
+function ReelModal({ reel, onClose }) {
+  if (!reel?.recap_url) return null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(10,8,6,0.92)',
+        zIndex: 2500,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+        animation: 'fadeIn 0.2s ease both',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#111',
+          borderRadius: 24,
+          overflow: 'hidden',
+          width: '100%',
+          maxWidth: 430,
+          position: 'relative',
+          animation: 'scaleIn 0.28s cubic-bezier(0.22,1,0.36,1) both',
+        }}
+      >
+        <video
+          src={reel.recap_url}
+          controls
+          autoPlay
+          playsInline
+          style={{
+            width: '100%',
+            maxHeight: '85vh',
+            display: 'block',
+            background: '#000',
+          }}
+        />
+
+        <div style={{ padding: '14px 16px', background: '#111' }}>
+          <div style={{
+            fontFamily: "'Instrument Serif', serif",
+            fontSize: 22,
+            fontStyle: 'italic',
+            color: '#f2efe9',
+            marginBottom: 4,
+          }}>
+            {reel.title}
+          </div>
+          <div style={{
+            fontFamily: "'Syne', sans-serif",
+            fontSize: 12,
+            color: 'rgba(242,239,233,0.65)',
+          }}>
+            {reel.date || 'Memory'} · {reel.place_name || 'Memory highlight'}
+          </div>
+        </div>
+
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            background: 'rgba(242,239,233,0.15)',
+            border: 'none',
+            color: '#f2efe9',
+            fontSize: 18,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          ✕
+        </button>
+      </div>
     </div>
   );
 }
@@ -454,30 +629,29 @@ export default function Home() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [data, setData]                 = useState(null);
-  const [loading, setLoading]           = useState(true);
-  const [loaded, setLoaded]             = useState(false);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState(null);
+  const [memoryReels, setMemoryReels] = useState([]);
+  const [selectedReel, setSelectedReel] = useState(null);
 
-  // Create album modal state (wired from albums page via ?create=true)
-  const [showCreate, setShowCreate]     = useState(false);
-  const [newAlbum, setNewAlbum]         = useState({ name: '', description: '' });
-  const [creating, setCreating]         = useState(false);
-  const [createMsg, setCreateMsg]       = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [newAlbum, setNewAlbum] = useState({ name: '', description: '' });
+  const [creating, setCreating] = useState(false);
+  const [createMsg, setCreateMsg] = useState('');
 
-  // Share album modal state (wired from ?share=true)
-  const [showShare, setShowShare]       = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [shareAlbumId, setShareAlbumId] = useState('');
   const [shareUsername, setShareUsername] = useState('');
-  const [sharing, setSharing]           = useState(false);
-  const [shareMsg, setShareMsg]         = useState('');
+  const [sharing, setSharing] = useState(false);
+  const [shareMsg, setShareMsg] = useState('');
 
   useEffect(() => {
     const t = setTimeout(() => setLoaded(true), 60);
     return () => clearTimeout(t);
   }, []);
 
-  // Open modals from query param (from albums page redirect)
   useEffect(() => {
     if (searchParams.get('create') === 'true') setShowCreate(true);
     if (searchParams.get('share') === 'true') setShowShare(true);
@@ -496,9 +670,31 @@ export default function Home() {
     }
   };
 
-  useEffect(() => { fetchHome(); }, []);
+  const fetchMemoryReels = async () => {
+    try {
+      const res = await fetch('/api/memory-highlights');
+      const d = await res.json().catch(() => ({}));
 
-  // ── Create album ──────────────────────────────────────────────────────────
+      if (!res.ok) {
+        console.error('Memory reels fetch failed:', d.error);
+        return;
+      }
+
+      const reels = (d.highlights || []).filter(
+        (item) => item.has_recap && item.recap_url
+      );
+
+      setMemoryReels(reels);
+    } catch (e) {
+      console.error('Memory reels fetch error:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchHome();
+    fetchMemoryReels();
+  }, []);
+
   const handleCreate = async () => {
     if (!newAlbum.name.trim()) return;
     setCreating(true);
@@ -523,7 +719,6 @@ export default function Home() {
     setCreating(false);
   };
 
-  // ── Share album ───────────────────────────────────────────────────────────
   const handleShare = async () => {
     if (!shareUsername.trim() || !shareAlbumId) return;
     setSharing(true);
@@ -548,7 +743,6 @@ export default function Home() {
   const pinnedAlbums = data?.pinnedAlbums ?? [];
   const recentAlbums = data?.recentAlbums ?? [];
 
-  // Deduplicate: don't show pinned albums again in "Recent"
   const pinnedIds = new Set(pinnedAlbums.map(a => a.id));
   const unpinnedRecent = recentAlbums.filter(a => !pinnedIds.has(a.id));
 
@@ -574,7 +768,6 @@ export default function Home() {
         .fu-3 { animation: fadeUp 0.7s cubic-bezier(0.22,1,0.36,1) 0.25s both; }
         .fu-4 { animation: fadeUp 0.7s cubic-bezier(0.22,1,0.36,1) 0.35s both; }
 
-        /* Scrollable memory strip */
         .memory-strip {
           display: flex;
           gap: 16px;
@@ -585,7 +778,6 @@ export default function Home() {
         }
         .memory-strip::-webkit-scrollbar { display: none; }
 
-        /* Buttons */
         .btn {
           display: inline-flex; align-items: center; gap: 7px;
           padding: 11px 22px; border-radius: 100px; border: none; cursor: pointer;
@@ -599,7 +791,6 @@ export default function Home() {
         .btn-ghost     { background: rgba(17,17,17,0.06); color: #111; border: 1.5px solid rgba(17,17,17,0.12); }
         .btn-ghost:hover { background: rgba(17,17,17,0.1); }
 
-        /* Modal */
         .modal-overlay {
           position: fixed; inset: 0;
           background: rgba(10,8,6,0.6);
@@ -644,7 +835,6 @@ export default function Home() {
           display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px;
         }
 
-        /* Skeleton shimmer */
         @keyframes shimmer {
           from { background-position: -400px 0; }
           to   { background-position: 400px 0; }
@@ -671,8 +861,6 @@ export default function Home() {
         minHeight: 'calc(100vh - 62px)',
         background: '#f2efe9',
       }}>
-
-        {/* ── Page header ───────────────────────────────────────────────── */}
         <div className={loaded ? 'fu-1' : ''} style={{ opacity: loaded ? undefined : 0, marginBottom: 36 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
             <div>
@@ -693,7 +881,6 @@ export default function Home() {
               </h1>
             </div>
 
-            {/* Quick actions */}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -713,7 +900,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ── Stats row ─────────────────────────────────────────────────── */}
         <div className={loaded ? 'fu-2' : ''} style={{
           opacity: loaded ? undefined : 0,
           display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 48,
@@ -724,15 +910,59 @@ export default function Home() {
             ))
           ) : (
             <>
-              <StatChip emoji="📷" value={stats.total_photos ?? 0}   label="Photos"      />
-              <StatChip emoji="🗂️"  value={stats.total_albums ?? 0}   label="Albums"      />
-              <StatChip emoji="✨"  value={stats.total_memories ?? 0} label="Memories"    />
-              <StatChip emoji="🆕"  value={stats.photos_this_month ?? 0} label="This month" />
+              <StatChip emoji="📷" value={stats.total_photos ?? 0} label="Photos" />
+              <StatChip emoji="🗂️" value={stats.total_albums ?? 0} label="Albums" />
+              <StatChip emoji="✨" value={stats.total_memories ?? 0} label="Memories" />
+              <StatChip emoji="🆕" value={stats.photos_this_month ?? 0} label="This month" />
             </>
           )}
         </div>
 
-        {/* ── Memory timeline ───────────────────────────────────────────── */}
+        <section className={loaded ? 'fu-3' : ''} style={{ opacity: loaded ? undefined : 0, marginBottom: 52 }}>
+          <SectionHeading
+            eyebrow="Auto-generated"
+            title="Memory Reels"
+          />
+
+          {memoryReels.length === 0 ? (
+            <div style={{
+              background: '#faf8f4',
+              border: '1px solid rgba(17,17,17,0.07)',
+              borderRadius: 18,
+              padding: '40px 32px',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>🎞️</div>
+              <p style={{
+                fontFamily: "'Instrument Serif', serif",
+                fontSize: 20,
+                fontStyle: 'italic',
+                color: 'rgba(17,17,17,0.5)',
+                marginBottom: 8,
+              }}>
+                No memory reels yet
+              </p>
+              <p style={{
+                fontFamily: "'Syne', sans-serif",
+                fontSize: 13,
+                color: 'rgba(17,17,17,0.38)',
+              }}>
+                Once your recap videos are generated, they will appear here
+              </p>
+            </div>
+          ) : (
+            <div className="memory-strip">
+              {memoryReels.map(reel => (
+                <MemoryReelCard
+                  key={reel.id}
+                  reel={reel}
+                  onClick={() => setSelectedReel(reel)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className={loaded ? 'fu-3' : ''} style={{ opacity: loaded ? undefined : 0, marginBottom: 52 }}>
           <SectionHeading
             eyebrow="Auto-generated"
@@ -798,7 +1028,6 @@ export default function Home() {
           )}
         </section>
 
-        {/* ── Pinned albums ─────────────────────────────────────────────── */}
         {(loading || pinnedAlbums.length > 0) && (
           <section className={loaded ? 'fu-4' : ''} style={{ opacity: loaded ? undefined : 0, marginBottom: 52 }}>
             <SectionHeading
@@ -834,7 +1063,6 @@ export default function Home() {
           </section>
         )}
 
-        {/* ── Recent albums ─────────────────────────────────────────────── */}
         <section className={loaded ? 'fu-4' : ''} style={{ opacity: loaded ? undefined : 0, marginBottom: 52 }}>
           <SectionHeading
             eyebrow="Recently updated"
@@ -906,16 +1134,20 @@ export default function Home() {
         </section>
       </main>
 
-      {/* ── Memory detail modal ───────────────────────────────────────── */}
       {selectedMemory && (
         <MemoryModal
           memory={selectedMemory}
           onClose={() => setSelectedMemory(null)}
-          router={router}
         />
       )}
 
-      {/* ── Create Album modal ────────────────────────────────────────── */}
+      {selectedReel && (
+        <ReelModal
+          reel={selectedReel}
+          onClose={() => setSelectedReel(null)}
+        />
+      )}
+
       {showCreate && (
         <div className="modal-overlay">
           <div className="modal-card">
@@ -973,7 +1205,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── Share Album modal ─────────────────────────────────────────── */}
       {showShare && (
         <div className="modal-overlay">
           <div className="modal-card">
