@@ -1,12 +1,8 @@
 // app/api/memories/[id]/photos/route.js
-// GET /api/memories/[id]/photos
-// Returns the full photo rows for all photo_ids stored in a memory.
-// Only accessible by the memory's owner.
-
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import pool from "@/lib/db";
-import getSupabaseAdmin from "@/lib/supabaseAdmin";
+import supabaseAdmin from "@/lib/supabaseAdmin";
 
 export async function GET(req, { params }) {
   try {
@@ -16,9 +12,8 @@ export async function GET(req, { params }) {
     const { id } = await params;
     const username = session.user.username;
 
-    // Verify this memory belongs to the user and get its photo_ids
     const memRes = await pool.query(
-      "SELECT photo_ids FROM memories WHERE id = $1 AND username = $2",
+      "SELECT photo_ids, period_start, period_end FROM memories WHERE id = $1 AND username = $2",
       [id, username]
     );
 
@@ -26,28 +21,37 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: "Memory not found" }, { status: 404 });
     }
 
-    const photoIds = memRes.rows[0].photo_ids;
-    if (!photoIds || !photoIds.length) {
-      return NextResponse.json({ photos: [] });
-    }
+    const { photo_ids: photoIds, period_start, period_end } = memRes.rows[0];
 
-    // Fetch full photo rows for those ids (only user's own photos — safe)
-    const photosRes = await pool.query(
-      `SELECT * FROM photos
-       WHERE id = ANY($1::int[])
-         AND uploaded_by = $2
-       ORDER BY COALESCE(date_taken, uploaded_at) ASC`,
-      [photoIds, username]
-    );
+    let photosRes;
+
+    if (photoIds && photoIds.length) {
+      // Use stored photo_ids if available
+      photosRes = await pool.query(
+        `SELECT * FROM photos
+         WHERE id = ANY($1::int[]) AND uploaded_by = $2
+         ORDER BY COALESCE(date_taken, uploaded_at) ASC`,
+        [photoIds, username]
+      );
+    } else {
+      // Fallback: fetch photos by date range from the memory period
+      photosRes = await pool.query(
+        `SELECT * FROM photos
+         WHERE uploaded_by = $1
+           AND COALESCE(date_taken, uploaded_at) >= $2
+           AND COALESCE(date_taken, uploaded_at) <= $3
+         ORDER BY COALESCE(date_taken, uploaded_at) ASC`,
+        [username, period_start, period_end]
+      );
+    }
 
     const ONE_YEAR = 60 * 60 * 24 * 365;
 
-    // Refresh signed URLs (same pattern as /api/photos)
     const photos = await Promise.all(
       photosRes.rows.map(async (photo) => {
         if (!photo.storage_path) return photo;
         try {
-          const { data, error } = await getSupabaseAdmin.storage
+          const { data, error } = await supabaseAdmin.storage
             .from("photos")
             .createSignedUrl(photo.storage_path, ONE_YEAR);
           if (error || !data?.signedUrl) return photo;

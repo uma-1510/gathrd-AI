@@ -101,16 +101,28 @@ function AlbumCard({ album, onPin, router, compact = false }) {
   );
 }
 
+// FIX: removed photo_ids guard — fetch photos by memory id directly
+// The /api/memories/[id]/photos route handles the date-range fallback
 function MemoryModal({ memory, onClose }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
+
   useEffect(() => {
-    if (!memory?.photo_ids?.length) { setLoading(false); return; }
-    fetch(`/api/memories/${memory.id}/photos`).then(r => r.json()).then(d => { if (d.photos) setPhotos(d.photos); }).finally(() => setLoading(false));
-  }, [memory]);
+    // FIX: was checking memory?.photo_ids?.length which is never set by /api/home
+    // Now just checks memory.id exists and always fetches
+    if (!memory?.id) { setLoading(false); return; }
+    setLoading(true);
+    fetch(`/api/memories/${memory.id}/photos`)
+      .then(r => r.json())
+      .then(d => { if (d.photos) setPhotos(d.photos); })
+      .catch(err => console.error('Memory photos fetch error:', err))
+      .finally(() => setLoading(false));
+  }, [memory?.id]);
+
   if (!memory) return null;
   const palette = moodStyle(memory.dominant_mood);
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(10,8,6,0.88)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, animation: 'fadeIn 0.2s ease both' }}>
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 860, maxHeight: '90vh', background: '#faf8f4', borderRadius: 24, overflow: 'hidden', display: 'flex', flexDirection: 'column', animation: 'scaleIn 0.28s cubic-bezier(0.22,1,0.36,1) both' }}>
@@ -130,9 +142,11 @@ function MemoryModal({ memory, onClose }) {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
               {photos.map(photo => (
-                <div key={photo.id} onClick={() => setSelectedPhoto(photo)} style={{ aspectRatio: '1 / 1', borderRadius: 12, overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s' }}
+                <div key={photo.id} onClick={() => setSelectedPhoto(photo)}
+                  style={{ aspectRatio: '1 / 1', borderRadius: 12, overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.03)'}
-                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                >
                   <img src={photo.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                 </div>
               ))}
@@ -222,8 +236,11 @@ function HomeContent() {
 
   const fetchHome = async () => {
     setLoading(true);
-    try { const res = await fetch('/api/home'); const d = await res.json(); if (!d.error) setData(d); }
-    catch (e) { console.error('Home fetch failed:', e); }
+    try {
+      const res = await fetch('/api/home');
+      const d = await res.json();
+      if (!d.error) setData(d);
+    } catch (e) { console.error('Home fetch failed:', e); }
     finally { setLoading(false); }
   };
 
