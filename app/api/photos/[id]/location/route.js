@@ -2,64 +2,77 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import pool from "@/lib/db";
-import { embedText, toSqlVector } from "@/lib/hf";
-import { syncLocationAlbum } from "@/lib/locationAlbum";
 
 export async function PATCH(req, { params }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
-  const { placeName } = await req.json();
-  if (!placeName?.trim()) return NextResponse.json({ error: "placeName required" }, { status: 400 });
-
-  const photo = await pool.query(
-    "SELECT * FROM photos WHERE id = $1 AND uploaded_by = $2",
-    [id, session.user.username]
-  );
-  if (!photo.rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  const row = photo.rows[0];
-  const oldPlace = row.place_name;
-  const newPlace = placeName.trim();
-
-  // Update place_name in DB
-  await pool.query("UPDATE photos SET place_name = $1 WHERE id = $2", [newPlace, id]);
-
-  // Re-embed description with new location
-  if (row.ai_description) {
-    const oldDesc = row.ai_description
-      .replace(/Location:[^.]+\./g, '')
-      .replace(/GPS[^.]+\./g, '')
-      .trim();
-    const newDesc = `${oldDesc} Location: ${newPlace}.`.trim();
-    try {
-      const emb = await embedText(newDesc);
-      await pool.query(
-        "UPDATE photos SET ai_description = $1, embedding = $2::vector WHERE id = $3",
-        [newDesc, toSqlVector(emb), id]
-      );
-    } catch {
-      await pool.query("UPDATE photos SET ai_description = $1 WHERE id = $2", [newDesc, id]);
-    }
-  }
-
-  // Sync location album for the new place name (fire-and-forget style, don't fail the request)
   try {
-    await syncLocationAlbum(session.user.username, newPlace);
-    // If the old place changed, re-sync the old album too (photo count may have dropped)
-    if (oldPlace && oldPlace !== newPlace) {
-      await syncLocationAlbum(session.user.username, oldPlace);
+    const session = await auth();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-  } catch (err) {
-    console.error("Location album sync error:", err);
-  }
 
-   try {
-    await syncLocationAlbum(session.user.username, parseInt(id), placeName.trim());
-  } catch (err) {
-    console.error("Location album sync error:", err.message);
-  }
+    // Next.js 15+: params is a Promise
+    const { id: photoId } = await params;
+    const body = await req.json();
+    const placeName = body.place_name;
 
-  return NextResponse.json({ message: "Location updated" });
+    console.log("=== LOCATION PATCH ===");
+    console.log("photoId:", photoId, "type:", typeof photoId);
+    console.log("placeName:", placeName);
+    console.log("session.user.username:", session.user.username);
+
+    if (!placeName || !placeName.trim()) {
+      return NextResponse.json({ error: "place_name required" }, { status: 400 });
+    }
+
+    // Check photo exists — no ownership filter yet, just find it
+    const check = await pool.query(
+      "SELECT id, uploaded_by FROM photos WHERE id = $1",
+      [parseInt(photoId, 10)]
+    );
+
+    console.log("check.rows:", JSON.stringify(check.rows));
+
+    if (!check.rows.length) {
+      return NextResponse.json({ error: "Photo not found" }, { status: 404 });
+    }
+
+    const row = check.rows[0];
+    const sessionIds = [
+      session.user.username,
+      session.user.email,
+      session.user.name,
+      session.user.id,
+    ].filter(Boolean).map(v => String(v).toLowerCase());
+
+    const uploadedBy = String(row.uploaded_by || "").toLowerCase();
+    console.log("sessionIds:", sessionIds, "uploadedBy:", uploadedBy);
+
+    if (!sessionIds.includes(uploadedBy)) {
+      console.log("OWNERSHIP MISMATCH");
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Run the update
+    const updateResult = await pool.query(
+      "UPDATE photos SET place_name = $1 WHERE id = $2 RETURNING id, place_name",
+      [placeName.trim(), parseInt(photoId, 10)]
+    );
+
+    console.log("UPDATE result:", JSON.stringify(updateResult.rows));
+
+    if (!updateResult.rows.length) {
+      console.log("UPDATE matched 0 rows!");
+      return NextResponse.json({ error: "Update failed" }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      message: "Location updated",
+      place_name: updateResult.rows[0].place_name,
+      id: updateResult.rows[0].id,
+    });
+
+  } catch (err) {
+    console.error("PATCH location error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

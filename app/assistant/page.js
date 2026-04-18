@@ -485,8 +485,14 @@ export default function AssistantPage() {
     setMessages(prev => [...prev, { role: 'assistant', content: '', thinking: 'Thinking…' }]);
 
     try {
-      // Convert to OpenAI format (strip tool_results from history)
-      const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content }));
+      // Pass tool_results as a summary so follow-up queries like
+      // "now make an album from those" have context to work with.
+      const apiMessages = newMessages.map(m => ({
+        role: m.role,
+        content: m.tool_results?.length
+          ? `${m.content || ''}${m.content ? '\n' : ''}[Retrieved via: ${m.tool_results.map(t => t.tool).join(', ')}]`
+          : m.content,
+      }));
 
       const res = await fetch('/api/assistant', {
         method: 'POST',
@@ -495,9 +501,8 @@ export default function AssistantPage() {
       });
 
       const data = await res.json();
-      
-      console.log("ASSISTANT RESPONSE", JSON.stringify(data, null, 2));
 
+      console.log("ASSISTANT RESPONSE", JSON.stringify(data, null, 2));
 
       if (!res.ok) throw new Error(data.error || 'Request failed');
 

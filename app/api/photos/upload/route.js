@@ -1,7 +1,6 @@
 // app/api/photos/upload/route.js
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import supabaseAdmin from "@/lib/supabaseAdmin";
 import pool from "@/lib/db";
 import { initDb } from "@/lib/initDb";
 import sharp from "sharp";
@@ -10,7 +9,6 @@ import { captionImage, embedText, toSqlVector } from "@/lib/hf";
 import { buildDescription } from "@/lib/description";
 import { matchFaceToPeople } from "@/lib/faceMatcher";
 import { syncLocationAlbum } from "@/lib/locationAlbum";
-
 
 const VIDEO_MIME_TYPES = new Set([
   "video/mp4", "video/quicktime", "video/x-msvideo",
@@ -22,7 +20,6 @@ function isVideo(file) {
   return VIDEO_MIME_TYPES.has(file.type) || VIDEO_EXTENSIONS.test(file.name);
 }
 
-// ── Reverse geocode coordinates → human-readable place name ──────────────────
 async function reverseGeocode(lat, lng) {
   try {
     const res = await fetch(
@@ -42,14 +39,39 @@ async function reverseGeocode(lat, lng) {
   }
 }
 
-// ── Generate a plain-text description for a video (no vision API needed) ─────
 function buildVideoDescription(filename) {
   const cleanName = filename
-    .replace(/\.[^.]+$/, "")         // strip extension
-    .replace(/[_-]/g, " ")           // underscores/dashes → spaces
-    .replace(/\d{13}[-_]?/g, "")     // strip timestamp prefixes
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\d{13}[-_]?/g, "")
     .trim();
   return `A video clip${cleanName ? `: ${cleanName}` : ""}.`;
+}
+
+// ── FIX: robust EXIF date extraction ─────────────────────────────────────────
+// exifr returns dates as JS Date objects, and the field name varies by camera.
+// Try all known date fields and convert whichever one we find to an ISO string.
+function extractExifDate(exif) {
+  if (!exif) return null;
+  const candidates = [
+    exif.DateTimeOriginal,
+    exif.CreateDate,
+    exif.DateTime,
+    exif.ModifyDate,
+    exif.GPSDateTime,
+  ];
+  for (const val of candidates) {
+    if (!val) continue;
+    // Already a Date object
+    if (val instanceof Date && !isNaN(val.getTime())) return val.toISOString();
+    // String like "2024:10:15 14:30:00" — convert colons in date part
+    if (typeof val === "string") {
+      const fixed = val.replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3");
+      const d = new Date(fixed);
+      if (!isNaN(d.getTime())) return d.toISOString();
+    }
+  }
+  return null;
 }
 
 export async function POST(req) {
@@ -62,6 +84,8 @@ export async function POST(req) {
     const formData = await req.formData();
     const files = formData.getAll("photos");
     const faceResultsRaw = formData.get("faceResults");
+    // FIX: accept manually entered location from client
+    const manualLocation = formData.get("manualLocation") || null;
 
     let faceResultsMap = {};
     if (faceResultsRaw) {
@@ -81,7 +105,6 @@ export async function POST(req) {
     }
 
     const uploadedPhotos = [];
-    // Track which locations were touched so we can sync albums once per location
     const touchedLocations = new Set();
 
     for (const file of files) {
@@ -93,46 +116,30 @@ export async function POST(req) {
       // ── VIDEO PATH ────────────────────────────────────────────────────────
       if (isVideo(file)) {
         const mimeType = file.type || "video/mp4";
-
         const { default: supabaseAdmin } = await import("@/lib/supabaseAdmin");
-        if (!supabaseAdmin?.storage) {
-          console.error("supabaseAdmin.storage unavailable — check SUPABASE_SERVICE_ROLE_KEY");
-          continue;
-        }
+        if (!supabaseAdmin?.storage) continue;
 
         const { error: uploadError } = await supabaseAdmin.storage
           .from("photos")
           .upload(storagePath, rawBuffer, { contentType: mimeType, upsert: false });
-
-        if (uploadError) {
-          console.error("Video upload error:", uploadError);
-          continue;
-        }
+        if (uploadError) { console.error("Video upload error:", uploadError); continue; }
 
         const { data: urlData } = supabaseAdmin.storage.from("photos").getPublicUrl(storagePath);
         const url = urlData.publicUrl;
-
         const description = buildVideoDescription(file.name);
 
         let embeddingValue = null;
-        try {
-          const emb = await embedText(description);
-          embeddingValue = toSqlVector(emb);
-        } catch {}
+        try { const emb = await embedText(description); embeddingValue = toSqlVector(emb); } catch {}
 
         await pool.query(
           `INSERT INTO photos (
             user_id, filename, url, uploaded_by, storage_path,
-            mime_type, file_size,
+            mime_type, file_size, place_name,
             ai_description, embedding, needs_recaption
-          ) VALUES (
-            $1,$2,$3,$4,$5,
-            $6,$7,
-            $8,$9::vector,$10
-          ) RETURNING id`,
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::vector,$11) RETURNING id`,
           [
             userId, filename, url, session.user.username, storagePath,
-            mimeType, file.size || null,
+            mimeType, file.size || null, manualLocation,
             description, embeddingValue, false,
           ]
         );
@@ -143,11 +150,9 @@ export async function POST(req) {
 
       // ── IMAGE PATH ────────────────────────────────────────────────────────
 
-      // Sharp metadata
       let imageMeta = {};
       try { imageMeta = await sharp(rawBuffer).metadata(); } catch {}
 
-      // Compress for upload
       let uploadBuffer = rawBuffer;
       try {
         uploadBuffer = await sharp(rawBuffer)
@@ -157,71 +162,69 @@ export async function POST(req) {
           .toBuffer();
       } catch {}
 
-      // EXIF
+      // FIX: parse EXIF with all date tags included
       let exif = {};
-      try { exif = await exifr.parse(rawBuffer, { gps: true }) ?? {}; } catch {}
+      try {
+        exif = await exifr.parse(rawBuffer, {
+          gps: true,
+          tiff: true,
+          exif: true,
+          // explicitly request all date fields
+          pick: [
+            "DateTimeOriginal", "CreateDate", "DateTime", "ModifyDate",
+            "GPSDateTime", "Make", "Model",
+            "GPSLatitude", "GPSLongitude", "latitude", "longitude",
+          ],
+        }) ?? {};
+      } catch {}
 
-      // Reverse geocode GPS → place name
+      // FIX: use robust date extractor
+      const dateTaken = extractExifDate(exif);
+
+      // GPS → place name (prefer GPS over manual if available)
       let placeName = null;
       if (exif?.latitude && exif?.longitude) {
         placeName = await reverseGeocode(exif.latitude, exif.longitude);
       }
-
-      // Upload to Supabase
-      const { default: supabaseAdminDynamic } = await import("@/lib/supabaseAdmin");
-      if (!supabaseAdminDynamic?.storage) {
-        console.error("supabaseAdmin.storage unavailable — check SUPABASE_SERVICE_ROLE_KEY");
-        continue;
+      // FIX: fall back to manually entered location if GPS not available
+      if (!placeName && manualLocation) {
+        placeName = manualLocation;
       }
+
+      const { default: supabaseAdminDynamic } = await import("@/lib/supabaseAdmin");
+      if (!supabaseAdminDynamic?.storage) continue;
 
       const { error: uploadError } = await supabaseAdminDynamic.storage
         .from("photos")
         .upload(storagePath, uploadBuffer, { contentType: "image/jpeg", upsert: false });
-
       if (uploadError) { console.error("Upload error:", uploadError); continue; }
 
       const { data: urlData } = supabaseAdminDynamic.storage.from("photos").getPublicUrl(storagePath);
       const url = urlData.publicUrl;
 
-      // Face data from client
       const faceData = faceResultsMap[file.name] || {};
       const faceCount = faceData.faceCount ?? 0;
       const emotion = faceData.dominantEmotion ?? null;
       const descriptor = faceData.descriptor ?? null;
 
-      // Match against known people
       const matchedPeople = await matchFaceToPeople(descriptor, session.user.username);
       const peopleNames = matchedPeople.map(p => p.name);
 
-      // AI caption via GPT-4o-mini vision
       let caption = null;
-      try {
-        caption = await captionImage(uploadBuffer);
-      } catch (err) {
+      try { caption = await captionImage(uploadBuffer); } catch (err) {
         console.error("Caption error:", err.message);
       }
 
-      // Build description
       const { description, needsRecaption } = buildDescription({
-        caption,
-        filename: file.name,
-        exif,
-        faceCount,
-        emotion,
-        peopleNames,
-        placeName,
+        caption, filename: file.name, exif, faceCount, emotion, peopleNames, placeName,
       });
 
-      // Embed description
       let embeddingValue = null;
       try {
         const emb = await embedText(description);
         embeddingValue = toSqlVector(emb);
-      } catch (err) {
-        console.error("Embedding error:", err.message);
-      }
+      } catch (err) { console.error("Embedding error:", err.message); }
 
-      // DB insert
       const inserted = await pool.query(
         `INSERT INTO photos (
           user_id, filename, url, uploaded_by, storage_path,
@@ -240,7 +243,9 @@ export async function POST(req) {
           userId, filename, url, session.user.username, storagePath,
           "image/jpeg", file.size || null,
           imageMeta.width || null, imageMeta.height || null, imageMeta.format || null,
-          exif?.DateTimeOriginal || null, exif?.Make || null, exif?.Model || null,
+          // FIX: use properly extracted date instead of raw exif.DateTimeOriginal
+          dateTaken,
+          exif?.Make || null, exif?.Model || null,
           exif?.latitude || null, exif?.longitude || null,
           placeName || null,
           faceCount, emotion, description, embeddingValue, needsRecaption,
@@ -249,7 +254,6 @@ export async function POST(req) {
 
       const photoId = inserted.rows[0].id;
 
-      // Link to matched people
       for (const person of matchedPeople) {
         await pool.query(
           "INSERT INTO photo_people (photo_id, person_id, confidence) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
@@ -257,26 +261,18 @@ export async function POST(req) {
         );
       }
 
-       if (placeName) {
-        try {
-          await syncLocationAlbum(session.user.username, photoId, placeName);
-        } catch (err) {
+      if (placeName) {
+        try { await syncLocationAlbum(session.user.username, photoId, placeName); } catch (err) {
           console.error("Location album sync error:", err.message);
         }
+        touchedLocations.add(placeName);
       }
-
-      // Track location for album sync
-      if (placeName) touchedLocations.add(placeName);
 
       uploadedPhotos.push({ filename, url, caption, description, peopleFound: peopleNames, isVideo: false });
     }
 
-    // ── Sync location albums for all touched places ───────────────────────
-    // Done after all photos are inserted so counts are accurate
     for (const place of touchedLocations) {
-      try {
-        await syncLocationAlbum(session.user.username, place);
-      } catch (err) {
+      try { await syncLocationAlbum(session.user.username, place); } catch (err) {
         console.error(`Location album sync failed for "${place}":`, err);
       }
     }
