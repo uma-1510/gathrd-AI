@@ -43,6 +43,11 @@ search_photos — primary tool for finding photos. Use structured params:
 
 get_people_stats — ONLY for "who do I take most photos with" or "how many photos with [name]".
   DO NOT use this to show photos of a person — use search_photos instead.
+  CRITICAL: When user asks "who do I meet/take photos with the most" (no specific name):
+    - The result returns a "people" array sorted by photo_count DESC
+    - Only talk about and display people[0] — the single top person
+    - Say "You take the most photos with [name]!" and show only their photos
+    - NEVER list or mention all people in the array — only the #1 person
 
 get_photo_advice — for Instagram/editing advice. Call search_photos FIRST.
 
