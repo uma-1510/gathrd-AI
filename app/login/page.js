@@ -241,19 +241,6 @@ export default function Login() {
             Continue with Google
           </button>
 
-          {/* Forgot password — standalone link OUTSIDE the form */}
-          <div style={{ marginTop:16, textAlign:'center' }}>
-            <button
-              type="button"
-              onClick={() => { window.location.href = '/forgot-password'; }}
-              style={{ fontFamily:"'Syne',sans-serif", fontSize:12, color:'rgba(17,17,17,0.4)', background:'none', border:'none', cursor:'pointer', textDecoration:'underline', padding:0 }}
-              onMouseEnter={e => e.currentTarget.style.color = '#111'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(17,17,17,0.4)'}
-            >
-              Forgot your password?
-            </button>
-          </div>
-
         </div>
 
         {/* Sign up link */}
