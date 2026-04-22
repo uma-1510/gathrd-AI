@@ -3,23 +3,35 @@ import { NextResponse } from "next/server";
 export default function proxy(req) {
   const { pathname } = req.nextUrl;
 
-  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/signup');
-  const isApiAuth = pathname.startsWith('/api/auth');
-  const isStatic = pathname.startsWith('/_next') || pathname === '/favicon.ico';
+  const publicPaths = [
+    '/login',
+    '/signup',
+    '/forgot-password',
+    '/reset-password',
+    '/api/auth',
+    '/api/test-email',
+  ];
 
-  if (isStatic || isApiAuth) return NextResponse.next();
+  const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
+  const isStatic =
+    pathname.startsWith('/_next') ||
+    pathname === '/favicon.ico';
 
-  // Check for session token (NextAuth v5 uses this cookie name)
-  const token = req.cookies.get('authjs.session-token') ?? 
-                req.cookies.get('__Secure-authjs.session-token');
+  if (isStatic || isPublicPath) {
+    return NextResponse.next();
+  }
+
+  const token =
+    req.cookies.get('authjs.session-token') ??
+    req.cookies.get('__Secure-authjs.session-token');
 
   const isLoggedIn = !!token;
 
-  if (!isLoggedIn && !isAuthPage) {
+  if (!isLoggedIn) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  if (isLoggedIn && isAuthPage) {
+  if (isLoggedIn && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
     return NextResponse.redirect(new URL('/', req.url));
   }
 
