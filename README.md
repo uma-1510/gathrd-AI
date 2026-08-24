@@ -207,8 +207,3 @@ Protected routes
 - Background job queue for heavier processing at scale
 - Expanded highlight-reel and video pipeline
 
----
-
-## License
-
-ISC
