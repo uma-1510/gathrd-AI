@@ -19,7 +19,7 @@ copy, edits video — but photo management is still stuck where it was a decade
 ago: scroll through thousands of thumbnails and search by filename or date.
 Gathrd applies the same shift to your photo library. It's built for
 individuals and small groups (a family archive, a single event, a shared
-album with friends), not enterprise-scale DAM.
+album with friends).
 
 ---
 
@@ -57,20 +57,18 @@ question.
 ```
 Upload
   │
-  ├─ EXIF extraction (exifr)          → capture date, GPS coordinates, camera info
-  ├─ Reverse geocoding (OpenStreetMap) → GPS → human-readable place name
-  ├─ Vision captioning (OpenAI GPT-4o-mini) → one detailed sentence describing
-  │      what's happening, who's in it, expressions, setting, occasion
-  ├─ Event enrichment                 → caption keywords ("cake," "bouquet") are
-  │      mapped to searchable event phrases ("birthday celebration," "wedding")
-  ├─ Face detection & matching (face-api.js) → faces are detected client-side,
-  │      compared by Euclidean distance against the user's tagged People library
-  ├─ Text embedding (HuggingFace sentence-transformers, 384-dim)
-  │      → the enriched description is embedded and stored in Postgres via
-  │        pgvector, making it semantically searchable
-  └─ Content scoring                  → a 0–100 score from emotion, face count,
-         resolution, location, and description richness, used to surface
-         "best" photos automatically
+  ├─ EXIF extraction (exifr)                         → capture date, GPS coordinates, camera info
+  ├─ Reverse geocoding (OpenStreetMap)               → GPS → human-readable place name
+  ├─ Vision captioning (OpenAI GPT-4o-mini)          → one detailed sentence describing what's happening, who's in it, expressions, setting,
+                                                        occasion
+  ├─ Event enrichment                                → caption keywords ("cake," "bouquet") are
+                                                       mapped to searchable event phrases ("birthday celebration," "wedding")
+  ├─ Face detection & matching (face-api.js)         → faces are detected client-side,
+                                                       compared by Euclidean distance against the user's tagged People library
+  ├─ Text embedding (HuggingFace sentence-transformers, 384-dim)   → the enriched description is embedded and stored in Postgres via
+                                                                     pgvector, making it semantically searchable
+  └─ Content scoring                                    → a 0–100 score from emotion, face count, resolution, location, and description
+                                                           richness, used to surface "best" photos automatically
   │
   ▼
 Photo is now fully searchable, taggable, and eligible for memories/reels
